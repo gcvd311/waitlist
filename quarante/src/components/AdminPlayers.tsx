@@ -57,24 +57,37 @@ function useCropUpload() {
 
 export function PlayersTab({ content, update }: { content: Content; update: Update }) {
   const { pick, ui } = useCropUpload();
-  const [preview, setPreview] = useState(false);
+  const [previewSet, setPreviewSet] = useState(0);
   const players = content.players ?? [];
   const set = (i: number, fn: (p: Profile) => void) => update((c) => fn(c.players[i]));
+  const manName = (p: Profile, k: number) => (k === 0 ? p.maleName : p.maleNames?.[k] ?? "");
+  const setManName = (x: Profile, k: number, v: string) => {
+    if (k === 0) x.maleName = v;
+    else {
+      x.maleNames = [x.maleNames?.[0] ?? "", x.maleNames?.[1] ?? "", x.maleNames?.[2] ?? ""];
+      x.maleNames[k] = v;
+    }
+  };
+  const setManPhoto = (x: Profile, k: number, url: string) => {
+    const arr = [0, 1, 2].map((j) => x.malePhotos[j] || "");
+    arr[k] = url;
+    x.malePhotos = arr;
+  };
 
   return (
     <div>
       {ui}
       <section className="mb-10">
-        <h2 className="display text-3xl">The girls, and the men they become</h2>
+        <h2 className="display text-3xl">The girls, and their three men</h2>
         <p className="text-bone/55 text-sm mt-1 max-w-2xl">
-          Each card is one player. On the left, her real portrait: players tap it to join. On the right, her man for Round 3: his
-          fictional name and his portraits. Who is behind each man stays on the server until the unmasking.
+          Each card is one player. On the left, her real portrait: players tap it to join. On the right, up to three men for Round 3, each with
+          his own photo and name. On the Questions page you choose which man appears in each question, or let them rotate 1, 2, 3.
         </p>
       </section>
 
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="space-y-6">
         {players.map((p, i) => (
-          <article key={p.id} className="border border-bone/15 p-4">
+          <article key={p.id} className="border border-bone/15 rounded-2xl p-4">
             <div className="flex items-center justify-between mb-4">
               <span className="font-mono text-xs text-bone/40">Player {i + 1}</span>
               <label className="flex items-center gap-2 text-sm">
@@ -88,8 +101,8 @@ export function PlayersTab({ content, update }: { content: Content; update: Upda
                 Birthday girl
               </label>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="sm:pr-4 sm:border-r border-bone/10">
                 <p className="label mb-2 text-sage">Her · real portrait</p>
                 <Portrait photo={p.photo} name={p.name} />
                 <div className="flex gap-3 mt-2">
@@ -105,47 +118,30 @@ export function PlayersTab({ content, update }: { content: Content; update: Upda
                 <label className="label block mt-3 mb-1">Her real name</label>
                 <input className="box" value={p.name} onChange={(e) => set(i, (x) => void (x.name = e.target.value))} />
               </div>
-              <div>
-                <p className="label mb-2 text-rouge">Him · Round 3 portrait</p>
-                <Portrait photo={p.malePhotos[0]} name={p.maleName} />
-                <div className="flex gap-3 mt-2">
-                  <button className="label hover:text-bone" onClick={() => pick((url) => set(i, (x) => void x.malePhotos.push(url)))}>
-                    {p.malePhotos.length ? "Add another" : "Upload"}
-                  </button>
+              {[0, 1, 2].map((k) => (
+                <div key={k}>
+                  <p className="label mb-2 text-rouge">Man {k + 1}</p>
+                  <Portrait photo={p.malePhotos[k] || ""} name={manName(p, k) || p.maleName || "?"} />
+                  <div className="flex gap-3 mt-2">
+                    <button className="label hover:text-bone" onClick={() => pick((url) => set(i, (x) => setManPhoto(x, k, url)))}>
+                      {p.malePhotos[k] ? "Replace" : "Upload"}
+                    </button>
+                    {p.malePhotos[k] && (
+                      <button className="label hover:text-rouge" onClick={() => set(i, (x) => setManPhoto(x, k, ""))}>
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                  <label className="label block mt-3 mb-1">His name</label>
+                  <input
+                    className="box font-serif text-lg"
+                    value={manName(p, k)}
+                    placeholder={k === 0 ? "e.g. Chad" : p.maleName || "Same as Man 1"}
+                    onChange={(e) => set(i, (x) => setManName(x, k, e.target.value))}
+                  />
                 </div>
-                <label className="label block mt-3 mb-1">His fictional name</label>
-                <input className="box font-serif text-lg" value={p.maleName} onChange={(e) => set(i, (x) => void (x.maleName = e.target.value))} />
-              </div>
+              ))}
             </div>
-
-            {p.malePhotos.length > 0 && (
-              <div className="mt-4">
-                <p className="text-bone/45 text-xs mb-2">
-                  His portraits rotate from question to question. The first one is shown at the unmasking.
-                </p>
-                <div className="flex gap-2 flex-wrap">
-                  {p.malePhotos.map((ph, k) => (
-                    <div key={ph.slice(-24) + k} className="w-16">
-                      <Portrait photo={ph} name={p.maleName} className={k === 0 ? "outline outline-2 outline-rouge" : ""} />
-                      <div className="flex justify-between mt-1">
-                        <button
-                          className="label hover:text-bone disabled:opacity-20"
-                          disabled={k === 0}
-                          title="Move earlier"
-                          onClick={() => set(i, (x) => void ([x.malePhotos[k - 1], x.malePhotos[k]] = [x.malePhotos[k], x.malePhotos[k - 1]]))}
-                        >
-                          ←
-                        </button>
-                        <button className="label hover:text-rouge" title="Delete" onClick={() => set(i, (x) => void x.malePhotos.splice(k, 1))}>
-                          ×
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             <div className="flex gap-4 mt-4 pt-3 border-t border-bone/10">
               <button className="label hover:text-bone disabled:opacity-30" disabled={i === 0} onClick={() => update((c) => void ([c.players[i - 1], c.players[i]] = [c.players[i], c.players[i - 1]]))}>
                 Move up
@@ -176,104 +172,29 @@ export function PlayersTab({ content, update }: { content: Content; update: Upda
       )}
 
       <section className="mt-14">
-        <div className="flex items-end justify-between gap-4 mb-4">
+        <div className="flex items-end justify-between gap-4 mb-4 flex-wrap">
           <div>
             <h2 className="display text-3xl">The lineup</h2>
-            <p className="text-bone/55 text-sm mt-1">How the men appear together. In the game the order is shuffled for every question.</p>
+            <p className="text-bone/55 text-sm mt-1">How each set of men looks together. In the game the order is shuffled for every question.</p>
           </div>
-          <button className="btn-ghost btn-sm" onClick={() => setPreview(true)} disabled={players.length < 2}>
-            Preview the unmasking
-          </button>
+          <div className="flex gap-2">
+            {[0, 1, 2].map((k) => (
+              <button key={k} className={previewSet === k ? "btn-primary btn-sm" : "btn-ghost btn-sm"} onClick={() => setPreviewSet(k)}>
+                Man {k + 1}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
           {players.map((p) => (
             <div key={p.id}>
-              <Portrait photo={p.malePhotos[0]} name={p.maleName} />
-              <p className="font-serif text-lg mt-1">{p.maleName || <em className="text-bone/30">No name</em>}</p>
+              <Portrait photo={p.malePhotos[previewSet] || p.malePhotos.find(Boolean) || ""} name={manName(p, previewSet) || p.maleName} />
+              <p className="font-serif text-lg mt-1">{manName(p, previewSet) || p.maleName || <em className="text-bone/30">No name</em>}</p>
             </div>
           ))}
         </div>
+        <p className="text-bone/40 text-xs mt-2">If a man has no photo yet, his first available photo stands in.</p>
       </section>
-
-      {preview && <UnmaskPreview players={players} onClose={() => setPreview(false)} />}
-    </div>
-  );
-}
-
-/** Step through the unmasking with the current portraits, as the big screen will. */
-function UnmaskPreview({ players, onClose }: { players: Profile[]; onClose: () => void }) {
-  const [step, setStep] = useState(0);
-  const n = players.length;
-  const p = step >= 1 && step <= n ? players[step - 1] : null;
-  return (
-    <div className="fixed inset-0 z-[60] bg-ink overflow-y-auto">
-      <div className="max-w-5xl mx-auto px-5 py-6 min-h-full flex flex-col">
-        <div className="flex justify-between items-center mb-6">
-          <span className="label">Preview · the unmasking</span>
-          <button className="label hover:text-bone" onClick={onClose}>
-            Close
-          </button>
-        </div>
-        <div className="flex-1 flex flex-col justify-center" key={step}>
-          {step === 0 && (
-            <h1 className="display text-6xl anim-rise">
-              Who were these men, <span className="italic text-acid">really?</span>
-            </h1>
-          )}
-          {p && (
-            <div className="grid sm:grid-cols-2 gap-8 items-center">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="anim-rise">
-                  <Portrait photo={p.malePhotos[0]} name={p.maleName} />
-                  <p className="display text-3xl mt-2">{p.maleName}</p>
-                </div>
-                <div className="anim-unveil">
-                  <Portrait photo={p.photo} name={p.name} />
-                  <p className="display text-3xl mt-2 text-acid">{p.name}</p>
-                </div>
-              </div>
-              <h2 className="display text-6xl leading-[0.9]">
-                <span className="anim-rise block">{p.maleName}</span>
-                <span className="anim-unveil block italic text-bone/50 text-[0.6em]">is actually</span>
-                <span className="anim-unveil block text-acid" style={{ animationDelay: "1.9s" }}>
-                  {p.name}.
-                </span>
-              </h2>
-            </div>
-          )}
-          {step > n && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
-              {players.map((x, i) => (
-                <div key={x.id} className="anim-rise" style={{ animationDelay: `${i * 120}ms` }}>
-                  <div className="grid grid-cols-2 gap-1">
-                    <Portrait photo={x.malePhotos[0]} name={x.maleName} />
-                    <Portrait photo={x.photo} name={x.name} />
-                  </div>
-                  <p className="font-serif text-xl mt-1">
-                    {x.maleName} <span className="italic text-bone/45">is</span> <span className="text-acid">{x.name}</span>
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="flex gap-2 mt-8">
-          <button className="btn-ghost btn-sm" disabled={step === 0} onClick={() => setStep(step - 1)}>
-            Back
-          </button>
-          <span className="flex-1" />
-          {step <= n ? (
-            <button className="btn-acid btn-sm" onClick={() => setStep(step + 1)}>
-              {step === 0 ? "Unmask the first" : step < n ? "Unmask the next" : "Show them all"}
-            </button>
-          ) : (
-            <button className="btn-acid btn-sm" onClick={onClose}>
-              Done
-            </button>
-          )}
-        </div>
-        <p className="text-bone/40 text-xs mt-3">In the game, the men are unmasked from fewest votes to most.</p>
-      </div>
     </div>
   );
 }

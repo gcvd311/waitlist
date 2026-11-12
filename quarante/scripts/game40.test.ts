@@ -122,6 +122,34 @@ ok(fin.players.every((p) => typeof p.score === "number"), "scores revealed at th
 const chad = s.cast.find((m) => m.maleName === "Chad")!;
 const crystal = Object.values(s.players).find((p) => p.profileId === chad.profileId)!;
 ok(crystal.name === "Crystal", "Chad was Crystal all along");
-ok(s.menRevealed, "men's points released after the unmasking");
+ok(s.menRevealed, "men's points count once the round ends");
+ok(!s.rounds.some(() => phase(s) === "unmask"), "no unmasking");
 
 console.log(`game40: ${pass} checks passed`);
+
+// Three men per woman: rotate by default, or a fixed man per question
+{
+  const c7 = structuredClone(content);
+  c7.players = c7.players.map((p, i) => ({ ...p, malePhotos: [`data:image/png;base64,A${i}`, `data:image/png;base64,B${i}`, `data:image/png;base64,C${i}`], maleNames: ["", `Second${i}`, `Third${i}`] }));
+  c7.rounds = c7.rounds.map((r) => ({ ...r, enabled: r.kind === "men", includeBonus: false }));
+  c7.questions.men = c7.questions.men.map((q, i) => (i === 3 ? { ...q, manSet: 2 } : q));
+  const s7 = createRoomState("MEN3", c7, now());
+  c7.players.forEach((pr) => joinRoom(s7, "", { now: now(), isOnline: () => false, profileId: pr.id }));
+  applyHostAction(s7, { type: "start" }, now());
+  const qs7 = buildRoundPreview(s7);
+  ok(qs7[0].optionPhotos!.every((x) => x.includes("A")), "question 1 shows Man 1");
+  ok(qs7[1].optionPhotos!.every((x) => x.includes("B")) && qs7[1].options.every((n) => n.startsWith("Second")), "question 2 shows Man 2 with his name");
+  ok(qs7[2].optionPhotos!.every((x) => x.includes("C")), "question 3 shows Man 3");
+  ok(qs7[3].optionPhotos!.every((x) => x.includes("C")), "a question can pin Man 3");
+  ok(qs7[4].optionPhotos!.every((x) => x.includes("B")), "rotation carries on");
+  let g = 0;
+  while (s7.phase !== "final" && g++ < 100) {
+    if (s7.phase === "question") applyHostAction(s7, { type: "reveal" }, now());
+    else applyHostAction(s7, { type: "next" }, now());
+    ok(phase(s7) !== "unmask", "never shows the unmasking");
+  }
+}
+function buildRoundPreview(st: RoomState) {
+  return st.rounds[st.roundIndex].questions;
+}
+console.log(`game40 (incl. three men): ${pass} checks passed`);

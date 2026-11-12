@@ -23,6 +23,7 @@ export interface ContentQuestion {
   optionsFrom?: "players"; // options are the girls' names, filled in at game time
   fromPool?: boolean; // a Who Said That? slot, filled from the confessions
   askHer?: boolean; // she can answer it in advance on her page
+  manSet?: number; // Round 3: which of the three men appear (0, 1, 2); unset = rotate
   points?: number; // overrides the round's points
 }
 
@@ -31,8 +32,9 @@ export interface Profile {
   id: string;
   name: string;
   photo: string;
-  maleName: string;
-  malePhotos: string[]; // rotated across the men's questions
+  maleName: string; // Man 1's name
+  malePhotos: string[]; // up to three men: slot 0, 1, 2 (a slot can be "")
+  maleNames?: string[]; // names for Man 2 and Man 3 (slot 0 uses maleName)
   honoree?: boolean;
 }
 
@@ -140,6 +142,7 @@ export interface CastMember {
   profileId: string;
   maleName: string;
   photos: string[];
+  names: string[];
 }
 
 export interface Answer {

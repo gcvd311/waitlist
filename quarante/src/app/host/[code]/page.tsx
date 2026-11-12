@@ -773,7 +773,7 @@ function Dock({ view, run, hide }: { view: RoomView; run: (a: Record<string, unk
     round_intro: view.round?.qCount ? "Begin round" : "Next round",
     wager: "Lock wagers · show question",
     question: view.question?.kind === "men" ? "Close voting" : "Reveal now",
-    reveal: view.round && view.question && view.round.qIndex + 1 >= view.round.qCount && view.round.kind === "men" ? "Begin the unmasking" : "Next",
+    reveal: "Next",
     unmask: !view.unmask ? "Next" : view.unmask.step === 0 ? "Unmask the first" : view.unmask.step < view.unmask.total ? "Unmask the next" : view.unmask.step === view.unmask.total ? "Show them all" : "Continue",
     leaderboard: view.round && view.round.index + 1 < view.round.total ? "Next round" : "Reveal the final scores",
     final: "",

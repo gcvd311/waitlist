@@ -122,7 +122,6 @@ export default function SoloPage() {
         if (round.kind === "final40") return set({ q: s!.q + 1, phase: "wager", wagers: {}, awarded: {} });
         return setS({ ...s!, q: s!.q + 1, phase: "question", awarded: {}, endsAt: nq.timerSec ? Date.now() + nq.timerSec * 1000 : null, pausedLeft: null });
       }
-      if (round.kind === "men" && s!.content.players?.length) return set({ phase: "unmask", unmask: 0 });
       return set({ phase: "board" });
     }
     if (s!.phase === "unmask") {
