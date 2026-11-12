@@ -256,7 +256,7 @@ console.log(`game40 (incl. jump): ${pass} checks passed`);
 // Bonus game: MOST LIKELY TO...
 {
   const c = mergeContent(structuredClone(content));
-  ok(c.questions.likely.length === 10, "ten bonus questions to start");
+  ok(c.questions.likely.length === 20, "twenty bonus questions to start");
   ok(!createRoomState("X", c, now()).rounds.some((r) => r.kind === "likely"), "the bonus game is not part of the 40");
   const sb = createRoomState("LIKE", c, now());
   const ids: string[] = c.players.map((pr) => joinRoom(sb, "", { now: now(), isOnline: () => true, profileId: pr.id }).id);

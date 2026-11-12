@@ -412,7 +412,7 @@ function Question({ view, act, now, setToast }: { view: RoomView; act: ActFn; no
   const header = (
     <>
       <div className="flex justify-between items-baseline mb-2">
-        <span className="label truncate">{q.category ?? (q.kind === "men" ? "Votes are anonymous" : "")}</span>
+        <span className="label truncate">{q.category ?? (q.kind === "men" || q.kind === "likely" ? "Votes are anonymous" : "")}</span>
         <span className="text-2xl">
           <Timer variant="number" deadline={view.deadline} total={q.timerSec} now={now} paused={view.paused} pausedRemaining={view.pausedRemaining} onExpire={() => act({ type: "timeout" })} />
         </span>
