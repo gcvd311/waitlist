@@ -790,7 +790,6 @@ function FinalStage({ view, run }: { view: RoomView; run: (a: Record<string, unk
         ) : (
           <Sticker name="cat-smile" className="w-44 mt-6" />
         )}
-        {view.honoree.tagline && <p className="text-bone/50 mt-3">{view.honoree.tagline}</p>}
       </div>
     </div>
   );
@@ -880,25 +879,24 @@ function Slideshow({ view, run }: { view: RoomView; run: (a: Record<string, unkn
     return out;
   }, [view.encore.image, view.messages, photos]);
   const [i, setI] = useState(0);
-  const secs = Math.max(3, view.encore.slideSeconds || 8);
-  useEffect(() => {
-    const t = setTimeout(() => setI((x) => (x + 1) % slides.length), secs * 1000);
-    return () => clearTimeout(t);
-  }, [i, secs, slides.length]);
+  // No timer: the host clicks through at her own pace.
+  const last = slides.length - 1;
+  const next = () => setI((x) => Math.min(last, x + 1));
+  const prev = () => setI((x) => Math.max(0, x - 1));
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight") setI((x) => (x + 1) % slides.length);
-      else if (e.key === "ArrowLeft") setI((x) => (x - 1 + slides.length) % slides.length);
+      if (e.key === "ArrowRight" || e.key === " " || e.key === "Enter") setI((x) => Math.min(slides.length - 1, x + 1));
+      else if (e.key === "ArrowLeft") setI((x) => Math.max(0, x - 1));
       else if (e.key === "Escape") run({ type: "slideshow", on: false });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [slides.length, run]);
-  const s = slides[i % slides.length];
+  const s = slides[Math.min(i, last)];
 
   return (
     <div className="fixed inset-0 z-30 bg-ink flex flex-col">
-      <div key={i} className="flex-1 grid place-items-center px-10 lg:px-24 py-12 anim-fade">
+      <div key={i} className="flex-1 grid place-items-center px-10 lg:px-24 py-12 anim-fade cursor-pointer" onClick={next}>
         {s.kind === "image" && s.photo && (
           <div className="flex flex-col items-center gap-8">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -933,10 +931,18 @@ function Slideshow({ view, run }: { view: RoomView; run: (a: Record<string, unkn
           </div>
         )}
       </div>
-      <div className="flex justify-center gap-2 pb-24">
-        {slides.map((_, k) => (
-          <button key={k} onClick={() => setI(k)} className={`h-2 rounded-full transition-all ${k === i % slides.length ? "w-8 bg-acid" : "w-2 bg-bone/25"}`} aria-label={`Slide ${k + 1}`} />
-        ))}
+      <div className="flex justify-center items-center gap-4 pb-24">
+        <button className="btn-ghost btn-sm disabled:opacity-30" onClick={prev} disabled={i === 0}>
+          ‹ Previous
+        </button>
+        <div className="flex gap-2">
+          {slides.map((_, k) => (
+            <button key={k} onClick={() => setI(k)} className={`h-2 rounded-full transition-all ${k === i ? "w-8 bg-acid" : "w-2 bg-bone/25"}`} aria-label={`Slide ${k + 1}`} />
+          ))}
+        </div>
+        <button className="btn-acid btn-sm disabled:opacity-30" onClick={next} disabled={i === last}>
+          Next ›
+        </button>
       </div>
     </div>
   );
@@ -1022,6 +1028,26 @@ function Dock({
         <button className="btn-ghost btn-sm" onClick={() => setMore(!more)}>
           {more ? "Fewer" : "More"}
         </button>
+        <select
+          className="btn-ghost btn-sm bg-transparent cursor-pointer w-36"
+          value=""
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            if (!Number.isNaN(v)) run({ type: "jump", round: v });
+            if (welcome) setWelcome(false);
+          }}
+          title="Jump straight to a round or the final scores"
+        >
+          <option value="">Jump to…</option>
+          {view.roundTitles.map((t, k) => (
+            <option key={k} value={k} className="text-ink">
+              Round {k + 1}: {t.title}
+            </option>
+          ))}
+          <option value={view.roundTitles.length} className="text-ink">
+            Final scores and slideshow
+          </option>
+        </select>
         {view.phase === "lobby" && !welcome && (
           <button className="btn-ghost btn-sm" onClick={() => setWelcome(true)} title="Back to the welcome screen">
             ‹ Back

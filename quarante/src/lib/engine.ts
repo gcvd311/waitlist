@@ -1008,6 +1008,18 @@ export function applyHostAction(state: RoomState, action: HostAction, now: numbe
       state.finishedAt = null;
       return;
     }
+    case "jump": {
+      const target = Math.floor(Number(action.round));
+      if (!Number.isFinite(target) || target < 0) throw new GameError("Pick a round.");
+      if (state.current && (state.phase === "question" || state.phase === "wager")) clearKeys(state, [state.current.key]);
+      if (state.phase === "unmask") state.menRevealed = true;
+      state.paused = false;
+      state.pausedRemaining = null;
+      state.slideshow = false;
+      if (target >= state.rounds.length) return finish(state, now);
+      state.finishedAt = null;
+      return enterRound(state, target);
+    }
     case "slideshow":
       if (action.on && state.phase !== "final") throw new GameError("The slideshow plays on the final screen.");
       state.slideshow = !!action.on;

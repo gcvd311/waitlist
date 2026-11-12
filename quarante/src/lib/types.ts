@@ -310,6 +310,7 @@ export type HostAction =
   | { type: "tiebreak" }
   | { type: "extraRound" }
   | { type: "slideshow"; on: boolean }
+  | { type: "jump"; round: number } // a round's opening, or past the last round for the final scores
   | { type: "backToLobby" }
   | { type: "back" };
 

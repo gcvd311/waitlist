@@ -41,7 +41,7 @@ export const DEFAULT_CONTENT: Content = {
   teamsEnabled: false,
   honoree: {
     name: "Crystal",
-    tagline: "Forty, and entirely unrepentant.",
+    tagline: "",
     photos: [],
     facts: [],
   },

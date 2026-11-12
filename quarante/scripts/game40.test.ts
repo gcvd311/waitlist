@@ -233,3 +233,22 @@ console.log(`game40 (incl. back, kfm): ${pass} checks passed`);
   ok(se.rounds.length === 1, "play again drops the encore round");
 }
 console.log(`game40 (incl. encore): ${pass} checks passed`);
+
+// Host can jump between rounds and straight to the final
+{
+  const c = structuredClone(content);
+  const sj = createRoomState("JUMP", c, now());
+  joinRoom(sj, "", { now: now(), isOnline: () => true, profileId: c.players[1].id });
+  applyHostAction(sj, { type: "start" }, now());
+  applyHostAction(sj, { type: "next" }, now());
+  ok(phase(sj) === "question", "a question is open");
+  applyHostAction(sj, { type: "jump", round: 2 }, now());
+  ok(sj.roundIndex === 2 && phase(sj) === "round_intro", "jump to round 3");
+  applyHostAction(sj, { type: "jump", round: 0 }, now());
+  ok(sj.roundIndex === 0 && phase(sj) === "round_intro", "jump back to round 1");
+  applyHostAction(sj, { type: "jump", round: 99 }, now());
+  ok(phase(sj) === "final", "jump to the final scores");
+  applyHostAction(sj, { type: "slideshow", on: true }, now());
+  ok(sj.slideshow, "slideshow from the final");
+}
+console.log(`game40 (incl. jump): ${pass} checks passed`);

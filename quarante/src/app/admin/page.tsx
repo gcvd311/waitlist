@@ -331,15 +331,9 @@ function HerTab({ content, update }: { content: Content; update: Update }) {
   return (
     <div>
       <Section title="The birthday girl" hint="Her name fills every {name} in the questions.">
-        <div className="grid sm:grid-cols-2 gap-6">
-          <div>
-            <label className="label block mb-1">Name</label>
-            <input className="field font-serif text-3xl" value={h.name} onChange={(e) => update((c) => void (c.honoree.name = e.target.value))} />
-          </div>
-          <div>
-            <label className="label block mb-1">Line for the final screen</label>
-            <input className="field" value={h.tagline} onChange={(e) => update((c) => void (c.honoree.tagline = e.target.value))} />
-          </div>
+        <div className="max-w-md">
+          <label className="label block mb-1">Name</label>
+          <input className="field font-serif text-3xl" value={h.name} onChange={(e) => update((c) => void (c.honoree.name = e.target.value))} />
         </div>
       </Section>
 
@@ -1374,13 +1368,8 @@ function EncoreSection({ content, update }: { content: Content; update: Update }
           on={e.slideshow}
           set={(v) => set((x) => void (x.slideshow = v))}
           label={`Messages slideshow for ${content.honoree.name}`}
-          hint={`Your friends’ messages, one at a time, full screen. ${content.messages.length} written so far, in the Friends tab.`}
+          hint={`Your friends’ messages, one at a time, full screen. No timer: click, or press the right arrow, for the next one. ${content.messages.length} written so far, in the Friends tab.`}
         />
-        {e.slideshow && (
-          <div className="ml-7 max-w-[12rem]">
-            <Num label="Seconds per slide" value={e.slideSeconds} onChange={(v) => set((x) => void (x.slideSeconds = Math.max(3, v)))} />
-          </div>
-        )}
 
         <Toggle
           on={e.tiebreaker}
