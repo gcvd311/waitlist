@@ -1186,7 +1186,7 @@ function FriendsTab({ content, update }: { content: Content; update: Update }) {
 
       <Section
         title="Messages for her"
-        hint="Played as a slideshow from the final screen, one message at a time. Add as many photos to a message as you like (select several at once); four share a slide, more carry on to the next. Without any, her photos fill in."
+        hint="Played as a slideshow from the final screen, one message at a time. One slide per message, with all its photos beside the words. Select several photos at once. Without any, her photos fill in."
         action={
           <button className="btn-ghost btn-sm" onClick={() => update((c) => void c.messages.push({ id: uid(8), from: "", text: "" }))}>
             Add
