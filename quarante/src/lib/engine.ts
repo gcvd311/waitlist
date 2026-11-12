@@ -1108,7 +1108,7 @@ export function buildView(
           qCount: round.questions.length,
         }
       : null,
-    roundTitles: state.rounds.map((r) => ({ kind: r.kind, title: fillName(r.title, name) })),
+    roundTitles: state.rounds.map((r) => ({ kind: r.kind, title: fillName(r.title, name), count: r.count })),
     question,
     answeredIds: Object.keys(answers),
     eligibleIds: q ? Object.values(state.players).filter((p) => isEligible(q, p)).map((p) => p.id) : [],

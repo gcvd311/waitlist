@@ -55,16 +55,16 @@ body {
 
 /* Leopard band: drawn, not an image */
 .leopard {
-  background-color: rgb(206 120 116);
+  background-color: rgb(246 227 216);
   background-image:
-    radial-gradient(ellipse 9px 7px at 20% 30%, rgb(120 10 24) 60%, transparent 62%),
-    radial-gradient(ellipse 7px 9px at 70% 20%, rgb(120 10 24) 60%, transparent 62%),
-    radial-gradient(ellipse 10px 6px at 45% 75%, rgb(120 10 24) 60%, transparent 62%),
-    radial-gradient(ellipse 6px 8px at 85% 70%, rgb(120 10 24) 60%, transparent 62%),
-    radial-gradient(ellipse 14px 11px at 20% 30%, rgb(245 214 200) 60%, transparent 62%),
-    radial-gradient(ellipse 11px 13px at 70% 20%, rgb(245 214 200) 60%, transparent 62%),
-    radial-gradient(ellipse 14px 10px at 45% 75%, rgb(245 214 200) 60%, transparent 62%),
-    radial-gradient(ellipse 10px 12px at 85% 70%, rgb(245 214 200) 60%, transparent 62%);
+    radial-gradient(ellipse 6px 5px at 20% 30%, rgb(196 22 38) 60%, transparent 64%),
+    radial-gradient(ellipse 5px 6px at 70% 20%, rgb(196 22 38) 60%, transparent 64%),
+    radial-gradient(ellipse 6px 4px at 45% 75%, rgb(196 22 38) 60%, transparent 64%),
+    radial-gradient(ellipse 4px 5px at 85% 70%, rgb(196 22 38) 60%, transparent 64%),
+    radial-gradient(ellipse 11px 9px at 20% 30%, rgb(46 8 10) 58%, transparent 63%),
+    radial-gradient(ellipse 9px 11px at 70% 20%, rgb(46 8 10) 58%, transparent 63%),
+    radial-gradient(ellipse 11px 8px at 45% 75%, rgb(46 8 10) 58%, transparent 63%),
+    radial-gradient(ellipse 8px 10px at 85% 70%, rgb(46 8 10) 58%, transparent 63%);
   background-size: 64px 54px;
 }
 

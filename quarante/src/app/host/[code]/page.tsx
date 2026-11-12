@@ -4,8 +4,8 @@ import Link from "next/link";
 import { hostKey, LETTERS, ROMAN, store, teamColor } from "@/lib/client";
 import { useRoom } from "@/hooks/useRoom";
 import { sfx } from "@/lib/sound";
-import { Avatar, Mascot, MuteButton, Portrait, PromptText, QR, TeamDot, Timer, TitleLockup, Toast, Wordmark } from "@/components/ui";
-import { Crown, Heart, Sparkle } from "@/components/Cat";
+import { Avatar, Mascot, MuteButton, Portrait, PromptText, Sticker, TeamDot, Timer, TitleLockup, Toast, Wordmark } from "@/components/ui";
+import { Sparkle } from "@/components/Cat";
 import { Bars, KfmTable, Lineup, Ranking, screenGrid, revealHeadline, RevealResultList, Standings, TopPlayers, voteRows } from "@/components/game";
 import type { RoomView } from "@/lib/types";
 
@@ -116,16 +116,20 @@ export default function HostPage({ params }: { params: { code: string } }) {
 
       <section
         className={`flex-1 flex flex-col ${
-          view.phase === "lobby" || view.phase === "round_intro" ? "px-6 lg:px-12 py-4" : "card mx-6 lg:mx-12 mb-5 px-8 lg:px-14 py-8"
+          view.phase === "lobby" || view.phase === "round_intro" ? "px-6 lg:px-12 py-4" : "card relative mx-6 lg:mx-12 mb-5 px-8 lg:px-14 py-8"
         }`}
         key={`${view.phase}-${view.question?.key ?? view.round?.index ?? ""}`}
       >
+        {view.phase === "question" && view.question?.kind !== "men" && <Sticker name="bow" className="absolute -top-8 -right-6 w-28 rotate-12" />}
         <Stage view={view} run={run} now={now} />
       </section>
 
       {view.paused && (
         <div className="fixed inset-0 z-30 bg-ink/85 backdrop-blur-sm grid place-items-center anim-fade pointer-events-none">
-          <p className="display text-[10vw] italic">Paused.</p>
+          <div className="text-center">
+            <Mascot mascots={[]} pose="sleepy" className="w-64 mx-auto mb-6" />
+            <p className="title-face text-[7vw] -rotate-[3deg]">Paused.</p>
+          </div>
         </div>
       )}
 
@@ -197,7 +201,6 @@ function Lobby({ view, run }: { view: RoomView; run: (a: Record<string, unknown>
   const [origin, setOrigin] = useState("");
   const [menu, setMenu] = useState<string | null>(null);
   useEffect(() => setOrigin(window.location.origin), []);
-  const joinUrl = `${origin}/join/${view.code}`;
   return (
     <div className="flex-1 grid lg:grid-cols-[1fr_1.15fr] gap-12 items-center">
       <div className="relative flex flex-col items-center text-center">
@@ -208,12 +211,10 @@ function Lobby({ view, run }: { view: RoomView; run: (a: Record<string, unknown>
         <p className="font-serif italic font-bold text-[clamp(1.4rem,2.2vw,2.2rem)] mt-5 anim-rise delay-1">
           {view.honoree.name} turns 40. We have questions.
         </p>
-        <div className="flex items-center gap-8 mt-8 anim-rise delay-2">
-          {origin && <QR value={joinUrl} size={180} className="rounded-2xl" />}
-          <div className="text-left">
-            <p className="label">Join at {origin.replace(/^https?:\/\//, "")}/join</p>
-            <p className="font-mono font-bold text-[clamp(3.6rem,7vw,7rem)] leading-none tracking-[0.12em] mt-1">{view.code}</p>
-          </div>
+        <div className="mt-8 anim-rise delay-2">
+          <p className="label text-bone/80">Open the link and enter the room code</p>
+          <p className="font-mono font-bold text-[clamp(4rem,8vw,8rem)] leading-none tracking-[0.14em] mt-2">{view.code}</p>
+          <p className="font-mono text-lg mt-3 text-bone/80">{origin.replace(/^https?:\/\//, "")}/join</p>
         </div>
         <p className="mt-10 text-bone/50 anim-rise delay-4">
           {view.confessionCount} confession{view.confessionCount === 1 ? "" : "s"} in the vault. Players can add more from their phones while you wait.
@@ -270,7 +271,7 @@ function Lobby({ view, run }: { view: RoomView; run: (a: Record<string, unknown>
               Still choosing a photo: {view.players.filter((p) => !p.profileId).map((p) => p.name).join(", ")}
             </p>
           )}
-          <Mascot mascots={view.mascots} pose="hearts" index={1} className="absolute -top-14 -right-6 w-28 rotate-6" />
+          <Mascot mascots={[]} pose="hearts" className="absolute -top-16 right-20 w-24 rotate-6" />
         </div>
       )}
 
@@ -362,7 +363,7 @@ function RoundIntro({ view }: { view: RoomView }) {
           // eslint-disable-next-line @next/next/no-img-element
           <img src={photo!} alt="" className="absolute -right-6 -bottom-10 w-36 aspect-[4/5] object-cover rounded-2xl rotate-6 ring-4 ring-[#FFF5EC] shadow-xl" />
         ) : (
-          <Mascot mascots={view.mascots} pose="wink" index={r.index} className="absolute -right-6 -bottom-12 w-32" />
+          <Mascot mascots={view.mascots} pose="peekCream" index={r.index} className="absolute -right-6 -bottom-10 w-36" />
         )}
       </div>
     </div>
@@ -567,7 +568,7 @@ function MenResults({ view }: { view: RoomView }) {
         return (
           <div key={x.i} className="anim-rise" style={{ animationDelay: `${(rows.length - 1 - k) * 220}ms` }}>
             <div className="relative">
-              {win && <Crown className="absolute -top-9 left-1/2 -translate-x-1/2 w-20 z-10" />}
+              {win && <Sticker name="crown" className="absolute -top-12 left-1/2 -translate-x-1/2 w-24 z-10 -rotate-6" />}
               <Portrait photo={x.photo} name={x.name} dim={!win} className={win ? "ring-[5px] ring-gold" : ""}>
                 <span className={`absolute right-2 bottom-2 grid place-items-center min-w-12 h-12 rounded-full font-mono text-3xl font-bold ${win ? "bg-acid text-ink" : "bg-ink/80 text-bone"}`}>{x.n}</span>
               </Portrait>
@@ -643,7 +644,7 @@ function UnmaskStage({ view }: { view: RoomView }) {
           <Portrait photo={c.femalePhoto} name={c.femaleName ?? "?"} />
           <p className="chip text-2xl px-6 py-1 -mt-5 relative block w-fit mx-auto">{c.femaleName}</p>
         </div>
-        <Heart className="absolute left-1/2 top-[40%] -translate-x-1/2 w-16 anim-unveil" />
+        <Sticker name="heart" className="absolute left-1/2 top-[36%] -translate-x-1/2 w-20 anim-unveil" />
       </div>
       <div>
         <p className="label mb-4 anim-rise">
@@ -739,7 +740,11 @@ function FinalStage({ view, run }: { view: RoomView; run: (a: Record<string, unk
               <span className="italic text-acid">{winner}</span> {solo ? "wins." : "win."}
             </p>
           )}
-          <p className="font-serif italic text-[clamp(1.6rem,3vw,3rem)] mt-4 glint">Happy fortieth, {view.honoree.name}.</p>
+          <p className="font-serif italic font-bold text-[clamp(1.6rem,3vw,3rem)] mt-4 flex items-center gap-4">
+            Happy fortieth, {view.honoree.name}.
+            <Sticker name="double-hearts" className="w-16" />
+          </p>
+          <Sticker name="cat-smile" className="w-48 mt-6" />
           {view.honoree.tagline && <p className="text-bone/50 mt-2">{view.honoree.tagline}</p>}
         </div>
       {(photo || msg) && <div className="flex flex-col justify-center">

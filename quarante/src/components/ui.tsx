@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { useMuted, sfx } from "@/lib/sound";
 import { useNow } from "@/hooks/useRoom";
-import { Cat } from "./Cat";
 
 export function Wordmark({ className = "" }: { className?: string }) {
   return <span className={`title-face whitespace-nowrap ${className}`}>40 &amp; Questionable</span>;
@@ -22,13 +21,48 @@ export function TitleLockup({ className = "", size = "clamp(3.4rem, 15vw, 9rem)"
   );
 }
 
-/** The cat. Shows the host’s own uploaded artwork when there is some, otherwise the built-in cat. */
-export function Mascot({ mascots = [], pose = "peek", index = 0, className = "" }: { mascots?: string[]; pose?: "peek" | "wink" | "hearts" | "sit"; index?: number; className?: string }) {
+export type StickerName =
+  | "cat-peek-red" | "cat-wink-red" | "cat-hearts-red" | "cat-wave-red" | "cat-paws-red"
+  | "cat-head" | "cat-peek" | "cat-smile" | "cat-sleepy" | "cat-side"
+  | "bow" | "heart-glasses" | "heart" | "crown" | "leopard-heart" | "leopard-strip" | "ribbon" | "double-hearts";
+
+/** One of the host's stickers from /public/stickers. The "-red" cats are cut-outs made for the red background. */
+export function Sticker({ name, className = "", style }: { name: StickerName; className?: string; style?: React.CSSProperties }) {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={`/stickers/${name}.png`} alt="" draggable={false} className={`select-none pointer-events-none object-contain ${className}`} style={style} />;
+}
+
+type Pose = "peek" | "wink" | "hearts" | "sit" | "head" | "peekCream" | "smile" | "sleepy" | "side" | "wave" | "paws";
+const POSE: Record<Pose, StickerName> = {
+  peek: "cat-peek-red",
+  wink: "cat-wink-red",
+  hearts: "cat-hearts-red",
+  sit: "cat-smile",
+  head: "cat-head",
+  peekCream: "cat-peek",
+  smile: "cat-smile",
+  sleepy: "cat-sleepy",
+  side: "cat-side",
+  wave: "cat-wave-red",
+  paws: "cat-paws-red",
+};
+
+/** The cat. The sticker pack by default; artwork uploaded in the admin replaces it. */
+export function Mascot({ mascots = [], pose = "peek", index = 0, className = "" }: { mascots?: string[]; pose?: Pose; index?: number; className?: string }) {
   const own = mascots.length ? mascots[index % mascots.length] : null;
   if (own)
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={own} alt="" className={`object-contain ${className}`} />;
-  return <Cat pose={pose} className={className} />;
+  const name = POSE[pose];
+  // The cut-out cats lost their bow to the background; put the bow sticker back where it was.
+  if (name === "cat-peek-red" || name === "cat-wink-red" || name === "cat-hearts-red")
+    return (
+      <span className={`${className.includes("absolute") ? "" : "relative"} inline-block ${className}`}>
+        <Sticker name={name} className="w-full" />
+        <Sticker name="bow" className="absolute w-[50%] top-[1%] right-[-3%] rotate-[14deg]" />
+      </span>
+    );
+  return <Sticker name={name} className={className} />;
 }
 
 /** A consistent portrait frame: 4:5, cover-cropped, initial when empty. */

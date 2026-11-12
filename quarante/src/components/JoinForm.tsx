@@ -94,7 +94,7 @@ export default function JoinForm({ initialCode = "" }: { initialCode?: string })
           <div className="relative flex flex-col items-center px-3 pt-4 anim-rise">
             <Sparkle className="absolute left-4 top-10 w-6 text-bone anim-pulse" />
             <Sparkle className="absolute right-6 top-4 w-5 text-bone/80 anim-pulse" style={{ animationDelay: "0.7s" }} />
-            <Mascot mascots={mascots} pose="peek" index={0} className="w-32" />
+            <Mascot mascots={mascots} pose="head" index={0} className="w-36" />
             <h1 className="font-mono font-bold uppercase text-[2.6rem] leading-none mt-4 text-center">Join the game</h1>
           </div>
         ) : (
@@ -153,7 +153,7 @@ export default function JoinForm({ initialCode = "" }: { initialCode?: string })
           </section>
         )}
 
-        {(!usePortraits || picked) && (
+        {peek && (!usePortraits || picked) && (
           <div className="anim-rise px-3">
             <label className="label block mb-2" htmlFor="name">
               {usePortraits ? "Confirm your name" : "Your name"}
@@ -195,6 +195,7 @@ export default function JoinForm({ initialCode = "" }: { initialCode?: string })
           </button>
         )}
       </form>
+      {!peek && <Mascot mascots={[]} pose="wink" className="w-48 mx-auto -mb-12 mt-6 translate-x-14" />}
     </main>
   );
 }

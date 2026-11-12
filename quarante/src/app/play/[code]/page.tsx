@@ -4,8 +4,8 @@ import { useRouter } from "next/navigation";
 import { hostKey, playerKey, ROMAN, squarePhoto, store, teamColor, type PlayerCreds } from "@/lib/client";
 import { useRoom } from "@/hooks/useRoom";
 import { sfx } from "@/lib/sound";
-import { Avatar, Mascot, MuteButton, PhotoPicker, Portrait, Timer, Toast, TitleLockup } from "@/components/ui";
-import { Crown, Heart, Sparkle } from "@/components/Cat";
+import { Avatar, Mascot, MuteButton, PhotoPicker, Portrait, Sticker, Timer, Toast, TitleLockup } from "@/components/ui";
+import { Sparkle } from "@/components/Cat";
 import { Bars, KfmTable, Lineup, OptionLetter, Ranking, revealHeadline, Standings, voteRows } from "@/components/game";
 import HostRemote from "@/components/HostRemote";
 import type { RoomView } from "@/lib/types";
@@ -89,6 +89,7 @@ export default function PlayPage({ params }: { params: { code: string } }) {
       {view.phase === "unmask" && <h2 className="title-face text-center text-4xl -rotate-[3deg] pt-1 pb-5">The big reveal</h2>}
 
       <div className="card relative flex-1 flex flex-col px-5 py-6" key={`${view.phase}-${view.question?.key ?? view.round?.index ?? ""}`}>
+        {(view.phase === "question" || view.phase === "wager") && <Sticker name="bow" className="absolute -top-4 -right-2 w-14 rotate-12" />}
         <PlayerPhase view={view} act={act} now={now} setToast={setToast} teamName={myTeam?.name ?? ""} />
       </div>
       {view.phase === "lobby" && <Mascot mascots={view.mascots} pose="hearts" index={1} className="w-28 mx-auto -mt-6 relative z-10" />}
@@ -96,8 +97,9 @@ export default function PlayPage({ params }: { params: { code: string } }) {
       {view.paused && (
         <div className="fixed inset-0 z-40 bg-ink/90 backdrop-blur-sm grid place-items-center anim-fade">
           <div className="text-center">
+            <Mascot mascots={[]} pose="sleepy" className="w-44 mx-auto mb-6" />
             <p className="label mb-3">Paused</p>
-            <p className="display text-5xl italic">Top up your glass.</p>
+            <p className="font-serif italic font-bold text-4xl">Top up your glass.</p>
           </div>
         </div>
       )}
@@ -117,11 +119,16 @@ function RoundHeader({ view }: { view: RoomView }) {
   const q = view.question;
   const pct = view.progress.total ? Math.min(100, (view.progress.done / view.progress.total) * 100) : 0;
   return (
-    <div className="text-center pb-4 px-2">
+    <div className="text-center pb-6 px-2">
       <p className="font-mono font-semibold uppercase tracking-label text-[15px] leading-tight">
         {q?.kind === "tiebreak" ? "Tie-breaker" : `Round ${r.index + 1} / ${r.total}`}
       </p>
-      {q?.kind !== "tiebreak" && <p className="font-mono font-semibold uppercase text-[17px] leading-tight">{r.title}</p>}
+      {q?.kind !== "tiebreak" && (
+        <p className="font-mono font-semibold uppercase text-[17px] leading-tight">
+          {r.title}
+          {view.phase === "reveal" && q?.kind === "men" ? " · Results" : ""}
+        </p>
+      )}
       {q?.kind !== "tiebreak" && (
         <p className="font-mono uppercase tracking-label text-[12px] text-dust mt-0.5">
           {q?.bonus ? "Bonus question" : `Question ${Math.max(1, r.qIndex + 1)} / ${r.qCount}`}
@@ -222,15 +229,12 @@ function PortraitGrid({ view, onPick, mine }: { view: RoomView; onPick?: (id: st
             style={{ animationDelay: `${i * 60}ms` }}
           >
             <Portrait photo={pr.photo} name={pr.name} dim={!taken && !onPick} className={pr.id === mine ? "outline outline-[3px] outline-acid" : ""}>
-              <span
-                className={`absolute left-1.5 bottom-1.5 font-mono text-[10px] tracking-label px-1.5 py-0.5 ${
-                  taken ? "bg-acid text-ink" : "bg-ink/70 text-bone/60"
-                }`}
-              >
-                {taken ? (pr.online ? "READY" : "AWAY") : "WAITING"}
-              </span>
+              {pr.id === mine && <span className="absolute right-1.5 top-1.5 grid place-items-center w-6 h-6 rounded-full bg-acid text-ink text-xs font-bold">✓</span>}
             </Portrait>
-            <p className={`mt-1 text-sm truncate ${pr.id === mine ? "text-acid" : taken ? "" : "text-bone/45"}`}>{pr.name}</p>
+            <p className={`mt-1 text-sm text-center font-semibold truncate ${taken ? "" : "text-bone/45"}`}>{pr.name}</p>
+            <p className="text-center">
+              <span className={`chip text-[10px] ${taken ? "" : "bg-claret text-bone/60"}`}>{taken ? (pr.online ? "Ready" : "Away") : "Waiting"}</span>
+            </p>
           </button>
         );
       })}
@@ -267,7 +271,10 @@ function Lobby({ view, act, setToast, teamName }: { view: RoomView; act: ActFn; 
   return (
     <div className="flex-1 flex flex-col gap-12 pt-4">
       <section>
-        <TitleLockup className="anim-rise mb-8" size="clamp(2.6rem, 13vw, 4rem)" />
+        <div className="text-center mb-5">
+          <p className="font-mono font-bold uppercase text-3xl leading-none">Lobby</p>
+          <p className="label mt-1">{view.players.length} player{view.players.length === 1 ? "" : "s"}</p>
+        </div>
         {!usePortraits && (
           <div className="mb-8 anim-rise">
             <PhotoPicker
@@ -280,7 +287,7 @@ function Lobby({ view, act, setToast, teamName }: { view: RoomView; act: ActFn; 
             />
           </div>
         )}
-        <p className="label mb-3 anim-rise">You’re in, {me.name}</p>
+        <p className="text-center font-semibold mb-4 anim-rise">You’re in, {me.name}.</p>
         {view.teamsEnabled && (
           <>
             <h1 className="display text-5xl anim-rise delay-1">
@@ -571,7 +578,6 @@ function Final({ view }: { view: RoomView }) {
     const mine = view.me!.team === winner?.id;
     return (
       <div className="flex-1 flex flex-col justify-center gap-10">
-        <TitleLockup size="clamp(2.4rem, 12vw, 3.6rem)" className="anim-rise" />
         {view.tie ? (
           <h1 className="display text-5xl anim-rise delay-1">
             A dead heat. <span className="italic">Tie-breaker incoming.</span>
@@ -590,7 +596,6 @@ function Final({ view }: { view: RoomView }) {
   const n = sorted.length;
   return (
     <div className="flex-1 flex flex-col justify-center gap-8">
-      <TitleLockup size="clamp(2.4rem, 12vw, 3.6rem)" className="anim-rise" />
       <p className="label">The final scores</p>
       <Ranking players={view.players} highlight={view.me!.id} />
       {view.tie ? (
@@ -603,8 +608,9 @@ function Final({ view }: { view: RoomView }) {
           {sorted[0]?.id === view.me!.id && <span className="block text-acid text-3xl mt-2">That’s you.</span>}
         </p>
       )}
-      <p className="display text-3xl italic text-bone/70 anim-rise" style={{ animationDelay: `${n * 650 + 600}ms` }}>
+      <p className="font-serif italic font-bold text-3xl anim-rise flex items-center gap-3" style={{ animationDelay: `${n * 650 + 600}ms` }}>
         Happy fortieth, {view.honoree.name}.
+        <Sticker name="double-hearts" className="w-12" />
       </p>
     </div>
   );
@@ -696,7 +702,7 @@ function PhoneUnmask({ view }: { view: RoomView }) {
           <Portrait photo={card.femalePhoto} name={card.femaleName ?? "?"} />
           <p className="chip text-[15px] px-4 py-1 mt-3 block w-fit mx-auto">{card.femaleName}</p>
         </div>
-        <Heart className="absolute left-1/2 top-[38%] -translate-x-1/2 w-10 anim-unveil" />
+        <Sticker name="heart" className="absolute left-1/2 top-[34%] -translate-x-1/2 w-14 anim-unveil" />
       </div>
     </div>
   );
@@ -712,19 +718,23 @@ function Overview({ view }: { view: RoomView }) {
         {view.roundTitles.map((r, i) => (
           <li
             key={i}
-            className={`flex items-center gap-3 rounded-2xl border-2 px-3 py-2.5 anim-rise ${i === cur ? "border-acid bg-wine" : "border-bone/10"} ${i < cur ? "opacity-45" : ""}`}
+            className={`flex items-center gap-3 rounded-2xl border-2 bg-field px-3 py-2.5 anim-rise ${i === cur ? "border-acid" : "border-bone/10"} ${i < cur ? "opacity-45" : ""}`}
             style={{ animationDelay: `${i * 90}ms` }}
           >
             <span className="grid place-items-center w-10 h-10 shrink-0 rounded-full bg-acid text-ink font-mono text-lg font-semibold">{i + 1}</span>
             <span className="flex-1">
               <span className="block font-mono font-semibold uppercase leading-tight">{r.title}</span>
-              <span className="block text-xs text-dust uppercase font-mono tracking-label">{i === cur ? "Up now" : i < cur ? "Done" : "Coming up"}</span>
+              <span className="block text-xs text-dust uppercase font-mono tracking-label">
+                {r.count} questions{i === cur ? " · up now" : ""}
+              </span>
             </span>
+            <span className="text-acid text-2xl font-bold">›</span>
           </li>
         ))}
       </ol>
       {view.round && <p className="text-center font-serif italic font-bold text-xl mt-2">{view.round.subtitle}</p>}
       <p className="label text-center anim-pulse mt-auto">Eyes on the big screen</p>
+      <Sticker name="cat-peek" className="absolute -bottom-3 right-3 w-24" />
     </div>
   );
 }
@@ -740,7 +750,9 @@ function PhoneMenWinner({ view }: { view: RoomView }) {
     <div className="flex flex-col gap-5">
       {top && top.n > 0 && (
         <div className="relative w-32 mx-auto anim-rise">
-          <Crown className="absolute -top-7 left-1/2 -translate-x-1/2 w-16 z-10" />
+          <Sticker name="crown" className="absolute -top-9 left-1/2 -translate-x-1/2 w-20 z-10 -rotate-6" />
+          <Sparkle className="absolute -right-8 top-10 w-6 text-acid" />
+          <Sparkle className="absolute -left-7 top-24 w-4 text-acid" />
           <Portrait photo={top.photo} name={top.name} className="ring-4 ring-gold" />
           <p className="chip text-lg px-5 py-1 -mt-4 relative block w-fit mx-auto">{top.name}</p>
           <p className="font-mono text-2xl font-semibold uppercase text-center mt-2">
