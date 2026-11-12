@@ -828,7 +828,7 @@ function FinalScores({ view }: { view: RoomView }) {
 function Collage({ photos, big = false }: { photos: string[]; big?: boolean }) {
   const n = photos.length;
   const tilt = ["-rotate-2", "rotate-2", "rotate-1", "-rotate-1"];
-  const h = big ? 60 : 72;
+  const vh = big ? 60 : 72;
   if (n === 1)
     return (
       <div className={`${big ? "h-[60vh]" : "w-full max-h-[72vh]"} aspect-[4/5] mx-auto overflow-hidden rounded-2xl shadow-2xl -rotate-2`}>
@@ -836,15 +836,25 @@ function Collage({ photos, big = false }: { photos: string[]; big?: boolean }) {
         <img src={photos[0]} alt="" className="w-full h-full object-cover anim-drift" />
       </div>
     );
-  const cols = n === 2 ? 2 : 2;
-  const rows = n <= 2 ? 1 : 2;
+  // Any number of photos on one slide: the grid grows a column as the pile grows.
+  const cols = n <= 4 ? 2 : n <= 9 ? 3 : 4;
+  const rows = Math.ceil(n / cols);
+  const ratio = (cols * 4) / (rows * 5);
   return (
-    <div className="grid gap-4 mx-auto" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, height: `${h}vh`, aspectRatio: `${cols * 4} / ${rows * 5}` }}>
+    <div
+      className="grid gap-3 mx-auto"
+      style={{
+        gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+        gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+        width: `min(100%, calc(${vh}vh * ${ratio}))`,
+        aspectRatio: `${ratio}`,
+      }}
+    >
       {photos.map((src, k) => (
         <div
           key={src + k}
           className={`overflow-hidden rounded-xl shadow-2xl ring-4 ring-[#FFF5EC] ${tilt[k % 4]} anim-rise ${n === 3 && k === 0 ? "row-span-2" : ""}`}
-          style={{ animationDelay: `${k * 180}ms` }}
+          style={{ animationDelay: `${k * 120}ms` }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={src} alt="" className="w-full h-full object-cover" />
@@ -861,16 +871,9 @@ function Slideshow({ view, run }: { view: RoomView; run: (a: Record<string, unkn
     const out: { kind: "image" | "message" | "photo" | "end"; text?: string; from?: string; photo?: string; group?: string[] }[] = [];
     if (view.encore.image) out.push({ kind: "image", photo: view.encore.image });
     view.messages.forEach((m, k) => {
+      // One slide per person: the message with all their photos beside it.
       const own = m.photos.length ? m.photos : photos.length ? [photos[k % photos.length]] : [];
-      // Four photos share a slide; the rest follow on their own slides under the same name.
-      const groups: string[][] = [];
-      for (let g = 0; g < own.length; g += 4) groups.push(own.slice(g, g + 4));
-      if (!m.text.trim() && groups.length) {
-        groups.forEach((group) => out.push({ kind: "message", from: m.from, group }));
-        return;
-      }
-      out.push({ kind: "message", text: m.text, from: m.from, group: groups[0] ?? [] });
-      groups.slice(1).forEach((group) => out.push({ kind: "message", from: m.from, group }));
+      out.push({ kind: "message", text: m.text, from: m.from, group: own });
     });
     if (!view.messages.length) photos.forEach((ph) => out.push({ kind: "photo", photo: ph }));
     out.push({ kind: "end" });
