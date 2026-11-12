@@ -123,7 +123,7 @@ export default function HostPage({ params }: { params: { code: string } }) {
           ) : view.phase === "unmask" ? (
             <p className="title-face text-4xl -rotate-[3deg]">The big reveal</p>
           ) : (
-            <p className="title-face text-2xl -rotate-[2deg]">{view.honoree.name}’s Big 40</p>
+            <p className="title-face text-lg tracking-wide">{view.honoree.name}’s Big 40th</p>
           )}
         </div>
         <div className="flex items-center justify-end gap-5">
