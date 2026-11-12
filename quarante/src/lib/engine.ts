@@ -752,11 +752,13 @@ export function applyPlayerAction(state: RoomState, pid: string, action: PlayerA
 
   if (q.kind === "honoreeVs" && p.isHonoree) {
     if (q.answer !== undefined) return "Already answered in advance.";
-    if (state.honoreeAnswers[q.key] === undefined) state.honoreeAnswers[q.key] = value;
+    state.honoreeAnswers[q.key] = value; // she can change her mind until the reveal
   } else {
     if (!isEligible(q, p)) throw new GameError("You sit this one out.", 403);
     const bucket = (state.answers[q.key] = state.answers[q.key] ?? {});
-    if (bucket[pid]) return "locked"; // duplicate submission: first answer stands
+    // Players can change their answer until time is up or the host reveals; the last one counts.
+    const prev = bucket[pid];
+    if (prev && prev.value === value) return "same";
     bucket[pid] = { value, at: now, frac } satisfies Answer;
   }
 

@@ -386,18 +386,25 @@ function Wager({ view, act, setToast }: { view: RoomView; act: ActFn; setToast: 
 function Question({ view, act, now, setToast }: { view: RoomView; act: ActFn; now: () => number; setToast: (s: string) => void }) {
   const q = view.question!;
   const me = view.me!;
-  const [pending, setPending] = useState<string | number | null>(null);
+  const [pick, setPick] = useState<string | number | null>(null);
+  const [inflight, setInflight] = useState(false);
   const [text, setText] = useState("");
-  const chosen = me.answer ?? pending;
-  const locked = me.answer !== null && me.answer !== undefined;
+  const [editing, setEditing] = useState(false);
+  const answered = me.answer !== null && me.answer !== undefined;
+  const chosen = pick ?? me.answer;
+  const locked = false; // answers can change until time is up or the host reveals
+  const pending = inflight ? pick : null;
 
   async function submit(value: string | number) {
-    if (locked || pending !== null) return;
+    if (inflight || (answered && value === me.answer && pick === null)) return;
     sfx.unlock();
-    setPending(value);
+    setPick(value);
+    setInflight(true);
     const r = await act({ type: "answer", key: q.key, value });
+    setInflight(false);
+    setEditing(false);
     if (!r.ok) {
-      setPending(null);
+      setPick(null);
       if (r.message) setToast(r.message);
     } else sfx.lock();
   }
@@ -456,7 +463,7 @@ function Question({ view, act, now, setToast }: { view: RoomView; act: ActFn; no
 
       {q.kind === "men" && q.type === "vote" && (
         <div className="mt-auto">
-          <Lineup view={view} chosen={typeof chosen === "number" ? chosen : null} onPick={(i) => submit(i)} disabled={locked || pending !== null} />
+          <Lineup view={view} chosen={typeof chosen === "number" ? chosen : null} onPick={(i) => submit(i)} disabled={inflight} />
         </div>
       )}
 
@@ -470,7 +477,7 @@ function Question({ view, act, now, setToast }: { view: RoomView; act: ActFn; no
               <button
                 key={i}
                 data-option={i}
-                disabled={locked || pending !== null}
+                disabled={inflight}
                 onClick={() => submit(i)}
                 className={`w-full text-left flex items-center gap-3 pl-2 pr-5 py-2 rounded-full border-2 font-semibold transition anim-rise ${
                   active ? "bg-acid text-ink border-acid shadow-md" : locked ? "border-bone/10 text-bone/35" : "border-bone/15 bg-field hover:border-acid/60 active:scale-[0.99]"
@@ -493,8 +500,20 @@ function Question({ view, act, now, setToast }: { view: RoomView; act: ActFn; no
             if (text.trim()) submit(q.type === "number" ? Number(text) : text.trim());
           }}
         >
-          {locked ? (
-            <p className="display text-4xl italic text-acid">{String(me.answer)}</p>
+          {answered && !editing ? (
+            <div className="text-center">
+              <p className="display text-4xl text-acid">{String(chosen)}</p>
+              <button
+                type="button"
+                className="btn-ghost btn-sm mt-3"
+                onClick={() => {
+                  setText(String(chosen ?? ""));
+                  setEditing(true);
+                }}
+              >
+                Change my answer
+              </button>
+            </div>
           ) : (
             <>
               <input
@@ -506,8 +525,8 @@ function Question({ view, act, now, setToast }: { view: RoomView; act: ActFn; no
                 maxLength={140}
                 autoFocus
               />
-              <button className="btn-acid w-full py-4" disabled={!text.trim() || pending !== null}>
-                Lock it in
+              <button className="btn-acid w-full py-4" disabled={!text.trim() || inflight}>
+                {answered ? "Update my answer" : "Lock it in"}
               </button>
             </>
           )}
@@ -515,7 +534,7 @@ function Question({ view, act, now, setToast }: { view: RoomView; act: ActFn; no
       )}
 
       <p className="label text-center mt-6">
-        {locked ? "Locked in · " : ""}
+        {answered ? "Answer in · you can change it until time’s up · " : ""}
         {view.answeredIds.length}/{view.eligibleIds.length} answered
       </p>
     </div>
@@ -649,11 +668,9 @@ function KfmPicker({ view, locked, answer, onSubmit }: { view: RoomView; locked:
           </div>
         );
       })}
-      {!locked && (
-        <button className="btn-acid w-full py-4" disabled={!ready} onClick={() => onSubmit(picks.join(","))}>
-          Seal their fates
-        </button>
-      )}
+      <button className="btn-acid w-full py-4" disabled={!ready} onClick={() => onSubmit(picks.join(","))}>
+        {answer ? "Update their fates" : "Seal their fates"}
+      </button>
     </div>
   );
 }
