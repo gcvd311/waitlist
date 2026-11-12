@@ -210,7 +210,7 @@ console.log(`game40 (incl. back, kfm): ${pass} checks passed`);
   ok(buildView(se, { role: "host" }, now(), new Set([pe.id])).encore.extraRound, "encore settings reach the host screen");
   applyHostAction(se, { type: "slideshow", on: true }, now());
   ok(se.slideshow && buildView(se, { role: "player", pid: pe.id }, now(), new Set([pe.id])).slideshow, "slideshow on, phones know");
-  ok(buildView(se, { role: "player", pid: pe.id }, now(), new Set([pe.id])).messages[0].photo === "data:image/png;base64,P", "message photos reach the screen");
+  ok(buildView(se, { role: "player", pid: pe.id }, now(), new Set([pe.id])).messages[0].photos[0] === "data:image/png;base64,P", "message photos reach the screen");
   applyHostAction(se, { type: "slideshow", on: false }, now());
   ok(!se.slideshow, "slideshow off");
   applyHostAction(se, { type: "tiebreak" }, now());
