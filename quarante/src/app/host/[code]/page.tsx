@@ -104,7 +104,7 @@ export default function HostPage({ params }: { params: { code: string } }) {
           ) : view.phase === "unmask" ? (
             <p className="title-face text-4xl -rotate-[3deg]">The big reveal</p>
           ) : (
-            <p className="label text-bone/80">For {view.honoree.name}</p>
+            <p className="title-face text-2xl -rotate-[2deg]">{view.honoree.name}’s Big 40</p>
           )}
         </div>
         <div className="flex items-center justify-end gap-5">
@@ -829,6 +829,11 @@ function Dock({ view, run, hide }: { view: RoomView; run: (a: Record<string, unk
         <button className="btn-ghost btn-sm" onClick={() => setMore(!more)}>
           {more ? "Fewer" : "More"}
         </button>
+        {view.phase !== "lobby" && (
+          <button className="btn-ghost btn-sm" onClick={() => run({ type: "back" })} title="Go back one step">
+            ‹ Back
+          </button>
+        )}
         {view.phase !== "lobby" && view.phase !== "final" && (
           <button className="btn-ghost btn-sm" onClick={() => run({ type: view.paused ? "resume" : "pause" })}>
             {view.paused ? "Resume" : "Pause"}

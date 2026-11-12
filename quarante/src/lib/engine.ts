@@ -277,7 +277,7 @@ export function buildRound(state: RoomState, index: number): RoomQuestion[] {
       if (state.cast.length < 2) return [];
       return pick(c.questions.men ?? [], round).map((q, j) => {
         const lineup = shuffle(state.cast); // one fresh order per question, the same on every phone
-        const chosen = q.type === "kfm" ? lineup.slice(0, 3) : lineup;
+        const chosen = lineup; // Kill / F / Marry uses the whole lineup too
         // Which of her three men: the question's choice, or rotate 1, 2, 3, 1…
         const slot = typeof q.manSet === "number" ? q.manSet : j % 3;
         const photoOf = (m: CastMember) => m.photos[slot] || m.photos.find(Boolean) || "";
@@ -752,11 +752,13 @@ export function applyPlayerAction(state: RoomState, pid: string, action: PlayerA
 
   if (q.kind === "honoreeVs" && p.isHonoree) {
     if (q.answer !== undefined) return "Already answered in advance.";
-    if (state.honoreeAnswers[q.key] === undefined) state.honoreeAnswers[q.key] = value;
+    state.honoreeAnswers[q.key] = value; // she can change her mind until the reveal
   } else {
     if (!isEligible(q, p)) throw new GameError("You sit this one out.", 403);
     const bucket = (state.answers[q.key] = state.answers[q.key] ?? {});
-    if (bucket[pid]) return "locked"; // duplicate submission: first answer stands
+    // Players can change their answer until time is up or the host reveals; the last one counts.
+    const prev = bucket[pid];
+    if (prev && prev.value === value) return "same";
     bucket[pid] = { value, at: now, frac } satisfies Answer;
   }
 
@@ -783,6 +785,65 @@ export function applyTimeout(state: RoomState, now: number): boolean {
     return true;
   }
   return false;
+}
+
+/**
+ * One step back: to the previous question (shown with its answer), from a round's first
+ * question to its intro, from an intro or the scores to the end of the previous round.
+ * Nothing already answered is lost.
+ */
+function goBack(state: RoomState) {
+  const showQuestion = (ri: number, qi: number) => {
+    const r = state.rounds[ri];
+    if (!r?.questions.length) {
+      state.roundIndex = ri;
+      state.qIndex = -1;
+      state.current = null;
+      state.phase = "round_intro";
+      return;
+    }
+    state.roundIndex = ri;
+    state.qIndex = qi;
+    state.current = r.questions[qi];
+    computeAwards(state, state.current);
+    state.phase = "reveal";
+  };
+  state.deadline = null;
+  state.paused = false;
+  state.pausedRemaining = null;
+  switch (state.phase) {
+    case "question":
+    case "wager":
+    case "reveal":
+      if (state.current?.kind === "tiebreak") {
+        state.current = null;
+        state.phase = "final";
+        return;
+      }
+      if (state.qIndex > 0) return showQuestion(state.roundIndex, state.qIndex - 1);
+      state.current = null;
+      state.qIndex = -1;
+      state.phase = "round_intro";
+      return;
+    case "round_intro": {
+      const prev = state.roundIndex - 1;
+      if (prev < 0) throw new GameError("This is the first round.");
+      const qs = state.rounds[prev].questions;
+      return showQuestion(prev, Math.max(0, qs.length - 1));
+    }
+    case "leaderboard":
+    case "unmask": {
+      const qs = state.rounds[state.roundIndex].questions;
+      return showQuestion(state.roundIndex, Math.max(0, qs.length - 1));
+    }
+    case "final":
+      state.finishedAt = null;
+      state.current = null;
+      state.phase = "leaderboard";
+      return;
+    case "lobby":
+      return;
+  }
 }
 
 export function applyHostAction(state: RoomState, action: HostAction, now: number): void {
@@ -897,6 +958,8 @@ export function applyHostAction(state: RoomState, action: HostAction, now: numbe
       startQuestion(state, now);
       return;
     }
+    case "back":
+      return goBack(state);
     case "backToLobby":
       for (const r of state.rounds) clearKeys(state, r.questions.map((q) => q.key)), (r.questions = []);
       Object.assign(state, {

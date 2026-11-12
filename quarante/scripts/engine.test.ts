@@ -103,7 +103,12 @@ applyHostAction(s2, { type: "start" }, now());
 applyHostAction(s2, { type: "next" }, now());
 const k = s2.current!.key;
 applyPlayerAction(s2, a.id, { type: "answer", key: k, value: s2.current!.answer as number }, now());
-ok(applyPlayerAction(s2, a.id, { type: "answer", key: k, value: 0 }, now()) === "locked", "duplicate submission ignored");
+const right = s2.current!.answer as number;
+applyPlayerAction(s2, a.id, { type: "answer", key: k, value: (right + 1) % 4 }, now());
+ok(s2.answers[k][a.id].value === (right + 1) % 4, "a player can change her answer");
+applyPlayerAction(s2, a.id, { type: "answer", key: k, value: right }, now());
+ok(s2.answers[k][a.id].value === right, "the last answer counts");
+ok(applyPlayerAction(s2, a.id, { type: "answer", key: k, value: right }, now()) === "same", "repeat taps are harmless");
 ok(s2.phase === "question", "waits for B");
 
 // Pause freezes the clock; timeout only fires after the deadline
