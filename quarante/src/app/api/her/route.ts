@@ -1,7 +1,7 @@
 import { checkHerPassword, isHer, setHerCookie } from "@/lib/auth";
 import { fillName, GameError } from "@/lib/engine";
 import { body, fail, ok } from "@/lib/http";
-import { getContent, mutateContent } from "@/lib/store";
+import { getContent, mutateContent, resolvePhotos } from "@/lib/store";
 import type { Content } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -18,8 +18,9 @@ function herQuestions(c: Content) {
     image: q.image || undefined,
   });
   return [
-    ...c.questions.honoreeVs.filter((q) => q.prompt.trim()).map((q) => pick("honoreeVs", q)),
-    ...c.questions.knowHer.filter((q) => q.prompt.trim() && !("image" in q && !q.image)).map((q) => pick("knowHer", q)),
+    ...c.questions.knowHer.filter((q) => q.prompt.trim() && !q.off && !q.optionsFrom && !("image" in q && !q.image)).map((q) => pick("knowHer", q)),
+    ...c.questions.honoreeVs.filter((q) => q.prompt.trim() && !q.off).map((q) => pick("honoreeVs", q)),
+    ...(c.questions.finale ?? []).filter((q) => q.askHer && q.prompt.trim() && !q.off).map((q) => pick("finale", q)),
     ...c.questions.final40.filter((q) => q.aboutHer && q.prompt.trim()).map((q) => pick("final40", q)),
   ];
 }
@@ -28,7 +29,7 @@ export async function GET() {
   try {
     const c = await getContent();
     if (!isHer(c.honoreePassword)) return ok({ authed: false, name: c.honoree.name, configured: !!c.honoreePassword });
-    return ok({ authed: true, name: c.honoree.name, questions: herQuestions(c), answers: c.honoreeAnswers ?? {} });
+    return ok({ authed: true, name: c.honoree.name, questions: await resolvePhotos(herQuestions(c)), answers: c.honoreeAnswers ?? {} });
   } catch (e) {
     return fail(e);
   }

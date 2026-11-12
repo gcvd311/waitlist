@@ -4,13 +4,14 @@ import Link from "next/link";
 import { api, LETTERS } from "@/lib/client";
 import { Wordmark } from "@/components/ui";
 
-type Q = { id: string; set: "honoreeVs" | "knowHer" | "final40"; type: "mc" | "text" | "number"; prompt: string; options: string[]; image?: string };
+type Q = { id: string; set: "honoreeVs" | "knowHer" | "final40" | "finale"; type: "mc" | "text" | "number"; prompt: string; options: string[]; image?: string };
 type State = { authed: boolean; name: string; configured?: boolean; questions?: Q[]; answers?: Record<string, string | number> };
 
 const GROUPS: { set: Q["set"]; title: string; hint: string }[] = [
+  { set: "knowHer", title: "Crystal Clear?", hint: "Your real answers. Your friends will be checked against them." },
+  { set: "finale", title: "No Further Questions", hint: "A few for the last round." },
   { set: "honoreeVs", title: "Them vs. you", hint: "Your friends will try to guess what you picked here. Be honest; it’s more fun." },
-  { set: "knowHer", title: "How well do they know you?", hint: "Your real answers. They’ll be checked against what everyone guesses." },
-  { set: "final40", title: "For the final round", hint: "A few last facts about your life." },
+  { set: "final40", title: "Extra", hint: "A few last facts about your life." },
 ];
 
 export default function HerPage() {
@@ -48,7 +49,7 @@ export default function HerPage() {
     return (
       <main className="min-h-[100dvh] px-6 py-10 max-w-sm mx-auto flex flex-col justify-center">
         <Link href="/">
-          <Wordmark className="text-3xl" />
+          <Wordmark className="text-2xl" />
         </Link>
         <p className="label mt-12 mb-3">For the birthday girl only</p>
         <h1 className="display text-5xl">

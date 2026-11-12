@@ -51,10 +51,11 @@ do $$ begin
   alter publication supabase_realtime add table public.room_pulse;
 exception when duplicate_object then null; end $$;
 
--- Storage bucket for photos (public read; uploads only via the service role).
+-- Storage bucket for photos. PRIVATE: nothing is readable without a signed link,
+-- which the server hands out (valid 6 hours) only inside the game and the admin.
 insert into storage.buckets (id, name, public)
-values ('party', 'party', true)
-on conflict (id) do nothing;
+values ('party', 'party', false)
+on conflict (id) do update set public = false;
 
 -- Housekeeping: expired rooms are also deleted whenever a new room is created.
 -- Optional, if pg_cron is enabled:

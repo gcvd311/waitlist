@@ -1,5 +1,8 @@
 import type {
   Answer,
+  CastMember,
+  Profile,
+  UnmaskCard,
   Content,
   ContentQuestion,
   HostAction,
@@ -98,6 +101,7 @@ export function createRoomState(code: string, content: Content, now: number): Ro
       count: r.count,
       timerSec: r.timerSec,
       points: r.points,
+      includeBonus: r.includeBonus,
       questions: [],
     }));
   return {
@@ -124,8 +128,16 @@ export function createRoomState(code: string, content: Content, now: number): Ro
     skipped: [],
     tiebreakCount: 0,
     finishedAt: null,
+    cast: [],
+    hiddenKeys: [],
+    menRevealed: false,
+    unmaskStep: 0,
+    unmaskOrder: [],
   };
 }
+
+export const profileOf = (state: RoomState, p: Player): Profile | undefined =>
+  p.profileId ? state.content.players?.find((x) => x.id === p.profileId) : undefined;
 
 // ───────────────────────── building questions ─────────────────────────
 
@@ -146,11 +158,18 @@ function toRoomQ(
   name: string,
   shuffleOpts: boolean,
   herAnswers: Record<string, string | number> = {},
+  names: string[] = [],
 ): RoomQuestion {
   // An answer she gave in advance on her own page beats whatever the host typed.
   const her = herAnswers[q0.id];
   const hasHer = her !== undefined && her !== "";
-  const q: ContentQuestion = hasHer ? { ...q0, answer: her, placeholder: false } : q0;
+  let q: ContentQuestion = hasHer ? { ...q0, answer: her, placeholder: false } : q0;
+  // "Who is this about?": the options are the girls, the answer is a name.
+  if (q.optionsFrom === "players" && names.length) {
+    const target = typeof q.answer === "string" ? q.answer.trim().toLowerCase() : "";
+    const idx = names.findIndex((n) => n.toLowerCase() === target);
+    q = { ...q, type: "mc", options: names, answer: idx >= 0 ? idx : undefined, placeholder: idx < 0 ? true : q.placeholder };
+  }
   const { options, answer } = shuffleOpts ? shuffleOptions(q) : { options: q.options ?? [], answer: q.answer };
   return {
     key,
@@ -162,20 +181,57 @@ function toRoomQ(
     accept: q.accept,
     image: q.image || undefined,
     note: q.note ? fillName(q.note, name) : undefined,
-    category: q.category,
+    category: q.year ? String(q.year) : q.category,
     difficulty: q.difficulty,
-    points: round.kind === "trivia" ? Math.round(round.points * DIFF_MULT[q.difficulty ?? "medium"]) : round.points,
+    points: q.points ?? (round.kind === "trivia" ? Math.round(round.points * DIFF_MULT[q.difficulty ?? "medium"]) : round.points),
     timerSec: round.timerSec,
     aboutHer: q.aboutHer,
     placeholder: q.placeholder,
+    bonus: q.bonus,
   };
 }
 
 function usable(q: ContentQuestion): boolean {
+  if (q.fromPool) return true;
   if (!q.prompt?.trim()) return false;
   if ("image" in q && q.image === "") return false; // picture question without a picture yet
+  if (q.optionsFrom === "players") return true;
   if (q.type === "mc" && (!q.options || q.options.filter(Boolean).length < 2)) return false;
   return true;
+}
+
+/** The round's main questions in admin order (switched-on only), then any bonus questions. */
+function pick(list: ContentQuestion[], round: RoomRound & { includeBonus?: boolean }): ContentQuestion[] {
+  const on = list.filter((q) => !q.off && usable(q));
+  const main = on.filter((q) => !q.bonus).slice(0, round.count);
+  const bonus = round.includeBonus ? on.filter((q) => q.bonus) : [];
+  return [...main, ...bonus];
+}
+
+/** The girls' names for "who is it?" options: claimed names first, then the admin's list. */
+export function girlNames(state: RoomState): string[] {
+  const names: string[] = [];
+  const add = (n?: string) => {
+    const t = (n ?? "").trim();
+    if (t && !names.some((x) => x.toLowerCase() === t.toLowerCase())) names.push(t);
+  };
+  const profiles = state.content.players ?? [];
+  if (profiles.length) {
+    for (const pr of profiles) {
+      const claimed = Object.values(state.players).find((p) => p.profileId === pr.id);
+      add(claimed?.name ?? pr.name);
+    }
+  }
+  Object.values(state.players)
+    .sort((a, b) => a.joinedAt - b.joinedAt)
+    .forEach((p) => add(p.name));
+  return names;
+}
+
+function buildCast(state: RoomState): CastMember[] {
+  return (state.content.players ?? [])
+    .filter((p) => p.maleName.trim())
+    .map((p) => ({ token: uid(8), profileId: p.id, maleName: p.maleName.trim(), photos: p.malePhotos.filter(Boolean) }));
 }
 
 export function buildRound(state: RoomState, index: number): RoomQuestion[] {
@@ -187,15 +243,55 @@ export function buildRound(state: RoomState, index: number): RoomQuestion[] {
   const players = Object.values(state.players).sort((a, b) => a.joinedAt - b.joinedAt);
 
   const her = c.honoreeAnswers ?? {};
+  const names = girlNames(state);
   switch (round.kind) {
     case "knowHer":
-      return c.questions.knowHer.filter(usable).slice(0, round.count).map((q, j) => toRoomQ(q, round, key(j), name, false, her));
+      return pick(c.questions.knowHer, round).map((q, j) => toRoomQ(q, round, key(j), name, false, her, names));
+    case "past40":
+      return pick(c.questions.past40 ?? [], round).map((q, j) => toRoomQ(q, round, key(j), name, true, her, names));
+    case "finale": {
+      const pool = shuffle([...c.confessions, ...state.confessions].filter((x) => x.text.trim() && x.author.trim()));
+      const out: RoomQuestion[] = [];
+      for (const q of pick(c.questions.finale ?? [], round)) {
+        if (q.fromPool) {
+          const conf = pool.shift();
+          if (!conf) continue; // no confessions left: the slot quietly drops out
+          out.push(
+            toRoomQ({ ...q, type: "mc", prompt: conf.text.trim(), answer: conf.author, optionsFrom: "players", placeholder: false, note: q.note }, round, key(out.length), name, false, {}, names),
+          );
+          out[out.length - 1].kind = "whoSaid";
+          continue;
+        }
+        out.push(toRoomQ(q, round, key(out.length), name, false, her, names));
+      }
+      return out;
+    }
+    case "men": {
+      state.cast = buildCast(state);
+      if (state.cast.length < 2) return [];
+      return pick(c.questions.men ?? [], round).map((q, j) => {
+        const lineup = shuffle(state.cast); // one fresh order per question, the same on every phone
+        const chosen = q.type === "kfm" ? lineup.slice(0, 3) : lineup;
+        return {
+          key: key(j),
+          kind: "men" as const,
+          type: q.type === "kfm" ? ("kfm" as const) : ("vote" as const),
+          prompt: fillName(q.prompt, name),
+          options: chosen.map((m) => m.maleName),
+          optionIds: chosen.map((m) => m.token),
+          optionPhotos: chosen.map((m) => (m.photos.length ? m.photos[j % m.photos.length] : "")),
+          points: 0,
+          timerSec: round.timerSec,
+          bonus: q.bonus,
+        };
+      });
+    }
     case "honoreeVs":
-      return c.questions.honoreeVs.filter(usable).slice(0, round.count).map((q, j) => toRoomQ(q, round, key(j), name, false, her));
+      return pick(c.questions.honoreeVs, round).map((q, j) => toRoomQ(q, round, key(j), name, false, her, names));
     case "final40":
-      return c.questions.final40.filter(usable).slice(0, round.count).map((q, j) => toRoomQ(q, round, key(j), name, true, her));
+      return pick(c.questions.final40, round).map((q, j) => toRoomQ(q, round, key(j), name, true, her, names));
     case "trivia": {
-      const all = c.questions.trivia.filter(usable);
+      const all = c.questions.trivia.filter((q) => usable(q) && !q.off);
       const level = c.triviaLevel ?? "mixed";
       const ok = (q: ContentQuestion) =>
         level === "hardest" ? q.difficulty === "hard" : level === "harder" ? q.difficulty !== "easy" : true;
@@ -247,7 +343,7 @@ export function buildRound(state: RoomState, index: number): RoomQuestion[] {
 export function isEligible(q: RoomQuestion, p: Player): boolean {
   if (!p.isHonoree) return true;
   if (q.kind === "knowHer" || q.kind === "honoreeVs") return false;
-  if (q.kind === "final40" && q.aboutHer) return false;
+  if ((q.kind === "final40" || q.kind === "finale") && q.aboutHer) return false;
   return true;
 }
 
@@ -275,7 +371,23 @@ export function computeAwards(state: RoomState, q: RoomQuestion): void {
   const teamAwards: Record<string, number> = {};
   const sc = state.content.scoring;
 
-  if (q.type === "vote") {
+  if (q.kind === "men") {
+    // Votes for a man are points for the girl he secretly is. Kept out of every score until the unmasking.
+    if (!state.hiddenKeys.includes(q.key)) state.hiddenKeys.push(q.key);
+    for (const pid of Object.keys(answers)) if (sc.menParticipation > 0 && state.players[pid]) awards[pid] = sc.menParticipation;
+    if (q.type === "vote" && sc.menWinner > 0) {
+      const counts = q.options.map((_, i) => Object.values(answers).filter((a) => a.value === i).length);
+      const max = Math.max(0, ...counts);
+      if (max > 0) {
+        counts.forEach((n, i) => {
+          if (n !== max) return;
+          const member = state.cast.find((m) => m.token === q.optionIds?.[i]);
+          const girl = member && Object.values(state.players).find((p) => p.profileId === member.profileId);
+          if (girl) awards[girl.id] = (awards[girl.id] ?? 0) + sc.menWinner;
+        });
+      }
+    }
+  } else if (q.type === "vote") {
     const counts: Record<string, number> = {};
     Object.values(answers).forEach((a) => {
       const id = q.optionIds?.[a.value as number];
@@ -289,14 +401,14 @@ export function computeAwards(state: RoomState, q: RoomQuestion): void {
       if (id && winners.includes(id) && q.points > 0) awards[pid] = q.points;
     }
   } else if (q.type === "number") {
+    // Closest guess wins. In a tie-breaker between teams the team gets it; otherwise the players do.
     const target = Number(q.answer);
     const entries = Object.entries(answers).filter(([pid]) => state.players[pid]);
-    if (entries.length) {
+    if (entries.length && Number.isFinite(target)) {
       const best = Math.min(...entries.map(([, a]) => Math.abs(Number(a.value) - target)));
-      const winningTeams = new Set(
-        entries.filter(([, a]) => Math.abs(Number(a.value) - target) === best).map(([pid]) => state.players[pid].team),
-      );
-      winningTeams.forEach((t) => (teamAwards[t] = 10));
+      const winners = entries.filter(([, a]) => Math.abs(Number(a.value) - target) === best).map(([pid]) => pid);
+      if (q.kind === "tiebreak" && state.content.teamsEnabled) new Set(winners.map((pid) => state.players[pid].team)).forEach((t) => (teamAwards[t] = 10));
+      else winners.forEach((pid) => (awards[pid] = q.kind === "tiebreak" ? 10 : q.points));
     }
   } else if (q.kind === "final40") {
     const wagers = state.wagers[q.key] ?? {};
@@ -318,7 +430,7 @@ export function computeAwards(state: RoomState, q: RoomQuestion): void {
     const surprise = q.kind === "honoreeVs" && right.length > 0 && right.length <= Math.ceil(guessers.length / 3) && guessers.length >= 3;
     for (const pid of right) {
       let pts = q.points;
-      if (q.kind === "trivia") pts += Math.round(sc.speedBonus * Math.max(0, Math.min(1, answers[pid].frac)));
+      if (q.kind === "trivia" || q.kind === "past40") pts += Math.round(sc.speedBonus * Math.max(0, Math.min(1, answers[pid].frac)));
       if (surprise) pts = Math.round(pts * sc.surpriseMultiplier);
       awards[pid] = pts;
     }
@@ -329,7 +441,10 @@ export function computeAwards(state: RoomState, q: RoomQuestion): void {
 
 export function playerScore(state: RoomState, pid: string): number {
   let s = 0;
-  for (const k in state.awards) s += state.awards[k][pid] ?? 0;
+  for (const k in state.awards) {
+    if (!state.menRevealed && state.hiddenKeys?.includes(k)) continue;
+    s += state.awards[k][pid] ?? 0;
+  }
   for (const a of state.adjustments) if (a.target === "player" && a.targetId === pid) s += a.delta;
   return s;
 }
@@ -375,6 +490,35 @@ function gotoQuestion(state: RoomState, j: number, now: number) {
     state.deadline = null;
     state.wagers[state.current.key] = state.wagers[state.current.key] ?? {};
   } else startQuestion(state, now);
+}
+
+/** Tally the men's votes and line them up for the reveal, fewest votes first. */
+export function menTally(state: RoomState): Record<string, { votes: number; wins: number }> {
+  const t: Record<string, { votes: number; wins: number }> = Object.fromEntries(state.cast.map((m) => [m.token, { votes: 0, wins: 0 }]));
+  for (const r of state.rounds) {
+    if (r.kind !== "men") continue;
+    for (const q of r.questions) {
+      if (q.type !== "vote") continue;
+      const counts = q.options.map((_, i) => Object.values(state.answers[q.key] ?? {}).filter((a) => a.value === i).length);
+      const max = Math.max(0, ...counts);
+      counts.forEach((n, i) => {
+        const tok = q.optionIds?.[i];
+        if (!tok || !t[tok]) return;
+        t[tok].votes += n;
+        if (n === max && max > 0) t[tok].wins++;
+      });
+    }
+  }
+  return t;
+}
+
+function startUnmask(state: RoomState) {
+  const tally = menTally(state);
+  state.unmaskOrder = [...state.cast].sort((a, b) => tally[a.token].votes - tally[b.token].votes || a.maleName.localeCompare(b.maleName)).map((m) => m.token);
+  state.unmaskStep = 0;
+  state.current = null;
+  state.deadline = null;
+  state.phase = "unmask";
 }
 
 function afterRound(state: RoomState) {
@@ -423,9 +567,17 @@ function advance(state: RoomState, now: number) {
       if (state.current?.kind === "tiebreak") return finish(state, now);
       const r = state.rounds[state.roundIndex];
       if (state.qIndex + 1 < r.questions.length) gotoQuestion(state, state.qIndex + 1, now);
+      else if (r.kind === "men" && state.cast.length) startUnmask(state);
       else afterRound(state);
       return;
     }
+    case "unmask":
+      if (state.unmaskStep <= state.unmaskOrder.length) state.unmaskStep++;
+      else {
+        state.menRevealed = true;
+        afterRound(state);
+      }
+      return;
     case "leaderboard":
       return nextRoundOrFinish(state, now);
     case "final":
@@ -451,11 +603,12 @@ function clearKeys(state: RoomState, keys: string[]) {
 }
 
 export function isTie(state: RoomState): boolean {
-  const scores = state.content.teams.map((t) => teamScore(state, t.id)).sort((a, b) => b - a);
+  const scores = (state.content.teamsEnabled ? state.content.teams.map((t) => teamScore(state, t.id)) : Object.keys(state.players).map((id) => playerScore(state, id))).sort((a, b) => b - a);
   return scores.length > 1 && scores[0] === scores[1];
 }
 
 function assignTeam(state: RoomState): string {
+  if (!state.content.teamsEnabled) return state.content.teams[0]?.id ?? "all";
   const counts = state.content.teams.map((t) => ({ id: t.id, n: Object.values(state.players).filter((p) => p.team === t.id).length }));
   counts.sort((a, b) => a.n - b.n);
   return counts[0].id;
@@ -466,8 +619,9 @@ function assignTeam(state: RoomState): string {
 export function joinRoom(
   state: RoomState,
   rawName: string,
-  opts: { now: number; isOnline: (pid: string) => boolean; honoree?: boolean },
+  opts: { now: number; isOnline: (pid: string) => boolean; honoree?: boolean; profileId?: string },
 ): Player {
+  if (opts.profileId) return claimProfile(state, rawName, opts.profileId, opts);
   const name = cleanName(rawName);
   if (name.length < 1) throw new GameError("Enter a name.");
   const existing = Object.values(state.players).find((p) => p.name.toLowerCase() === name.toLowerCase());
@@ -489,14 +643,53 @@ export function joinRoom(
   return p;
 }
 
+/** Join by tapping your own portrait. One portrait, one person; a quiet phone can be replaced. */
+function claimProfile(state: RoomState, rawName: string, profileId: string, opts: { now: number; isOnline: (pid: string) => boolean }): Player {
+  const profile = state.content.players?.find((x) => x.id === profileId);
+  if (!profile) throw new GameError("That portrait isn’t in this game.", 404);
+  const name = cleanName(rawName) || profile.name;
+  const holder = Object.values(state.players).find((p) => p.profileId === profileId);
+  if (holder) {
+    if (opts.isOnline(holder.id)) throw new GameError(`${holder.name} is already playing as this portrait. Ask the host to unlock it if that’s wrong.`, 409);
+    holder.name = name;
+    return holder; // same girl on a new phone, or after a refresh: same identity, same score
+  }
+  if (Object.keys(state.players).length >= MAX_PLAYERS) throw new GameError("This room is full.");
+  const p: Player = {
+    id: uid(10),
+    secret: uid(16),
+    name,
+    team: assignTeam(state),
+    isHonoree: !!profile.honoree,
+    joinedAt: opts.now,
+    profileId,
+  };
+  if (p.isHonoree) for (const o of Object.values(state.players)) o.isHonoree = false;
+  state.players[p.id] = p;
+  return p;
+}
+
 export function applyPlayerAction(state: RoomState, pid: string, action: PlayerAction, now: number): string | undefined {
   const p = state.players[pid];
   if (!p) throw new GameError("You’re no longer in this room. Rejoin with your name.", 401);
 
   if (action.type === "photo") {
     const photo = String(action.photo ?? "");
-    if (photo && !/^(https:\/\/|data:image\/)/.test(photo)) throw new GameError("That photo didn’t upload. Try another.");
+    if (photo && !/^(https:\/\/|data:image\/|sb:\/\/)/.test(photo)) throw new GameError("That photo didn’t upload. Try another.");
     p.photo = photo || undefined;
+    return;
+  }
+
+  if (action.type === "claim") {
+    if (p.profileId) throw new GameError("You already have a portrait. Ask the host to unlock it.");
+    const profile = state.content.players?.find((x) => x.id === action.profileId);
+    if (!profile) throw new GameError("That portrait isn’t in this game.", 404);
+    if (Object.values(state.players).some((o) => o.profileId === profile.id)) throw new GameError("Someone has already taken that portrait.", 409);
+    p.profileId = profile.id;
+    if (profile.honoree) {
+      for (const o of Object.values(state.players)) o.isHonoree = false;
+      p.isHonoree = true;
+    }
     return;
   }
 
@@ -527,7 +720,13 @@ export function applyPlayerAction(state: RoomState, pid: string, action: PlayerA
   if (state.deadline && now > state.deadline + ANSWER_GRACE_MS) throw new GameError("Time’s up.", 409);
 
   let value: string | number = action.value;
-  if (q.type === "mc" || q.type === "vote") {
+  if (q.type === "kfm") {
+    // "k,f,m": the option index given each fate. All three must be different men.
+    const parts = String(value).split(",").map(Number);
+    if (parts.length !== 3 || new Set(parts).size !== 3 || parts.some((n) => !Number.isInteger(n) || n < 0 || n >= q.options.length))
+      throw new GameError("Give each of them a different fate.");
+    value = parts.join(",");
+  } else if (q.type === "mc" || q.type === "vote") {
     value = Number(value);
     if (!Number.isInteger(value) || value < 0 || value >= q.options.length) throw new GameError("Pick one of the options.");
   } else if (q.type === "text") {
@@ -550,7 +749,7 @@ export function applyPlayerAction(state: RoomState, pid: string, action: PlayerA
     bucket[pid] = { value, at: now, frac } satisfies Answer;
   }
 
-  if (everyoneAnswered(state)) reveal(state);
+  if (state.content.scoring.autoReveal && q.kind !== "men" && everyoneAnswered(state)) reveal(state);
   return;
 }
 
@@ -600,6 +799,7 @@ export function applyHostAction(state: RoomState, action: HostAction, now: numbe
       return advance(state, now);
     case "skipRound":
       if (state.phase === "lobby" || state.phase === "final") return;
+      if (state.phase === "unmask") state.menRevealed = true;
       if (state.current && (state.phase === "question" || state.phase === "wager")) clearKeys(state, [state.current.key]);
       return nextRoundOrFinish(state, now);
     case "restartRound": {
@@ -654,6 +854,14 @@ export function applyHostAction(state: RoomState, action: HostAction, now: numbe
     case "setHonoree":
       for (const p of Object.values(state.players)) p.isHonoree = p.id === action.playerId;
       return;
+    case "release": {
+      const p = state.players[action.playerId];
+      if (p) {
+        p.profileId = undefined;
+        p.isHonoree = false;
+      }
+      return;
+    }
     case "kick":
       delete state.players[action.playerId];
       if (everyoneAnswered(state)) reveal(state);
@@ -698,6 +906,11 @@ export function applyHostAction(state: RoomState, action: HostAction, now: numbe
         skipped: [],
         tiebreakCount: 0,
         finishedAt: null,
+        cast: [],
+        hiddenKeys: [],
+        menRevealed: false,
+        unmaskStep: 0,
+        unmaskOrder: [],
       });
       return;
   }
@@ -740,7 +953,17 @@ export function buildReveal(state: RoomState, q: RoomQuestion): RevealData {
   let voteWinners: string[] | undefined;
   if (q.type === "vote") {
     const max = Math.max(0, ...distribution);
-    voteWinners = max >= 2 ? q.options.filter((_, i) => distribution[i] === max) : [];
+    voteWinners = max >= (q.kind === "men" ? 1 : 2) ? q.options.filter((_, i) => distribution[i] === max) : [];
+  }
+  let kfm: RevealData["kfm"];
+  if (q.type === "kfm") {
+    kfm = q.options.map((label, i) => ({ label, photo: q.optionPhotos?.[i] || undefined, k: 0, f: 0, m: 0 }));
+    for (const a of Object.values(answers)) {
+      const [k, f, m] = String(a.value).split(",").map(Number);
+      if (kfm[k]) kfm[k].k++;
+      if (kfm[f]) kfm[f].f++;
+      if (kfm[m]) kfm[m].m++;
+    }
   }
 
   const right = results.filter((r) => r.correct).length;
@@ -760,7 +983,41 @@ export function buildReveal(state: RoomState, q: RoomQuestion): RevealData {
     note: q.note,
     surprise,
     voteWinners,
+    kfm,
   };
+}
+
+function unmaskView(state: RoomState): RoomView["unmask"] {
+  if (state.phase !== "unmask") return null;
+  const tally = menTally(state);
+  const total = state.unmaskOrder.length;
+  const cards: UnmaskCard[] = state.unmaskOrder.map((tok, i) => {
+    const m = state.cast.find((x) => x.token === tok)!;
+    // Only cards already turned over carry who she is. The rest never leave the server.
+    const revealed = state.unmaskStep > i;
+    const profile = revealed ? state.content.players?.find((p) => p.id === m.profileId) : undefined;
+    const girl = revealed ? Object.values(state.players).find((p) => p.profileId === m.profileId) : undefined;
+    return {
+      token: tok,
+      maleName: m.maleName,
+      malePhoto: m.photos[0],
+      votes: tally[tok]?.votes ?? 0,
+      wins: tally[tok]?.wins ?? 0,
+      revealed,
+      femaleName: revealed ? girl?.name ?? profile?.name : undefined,
+      femalePhoto: revealed ? profile?.photo || girl?.photo : undefined,
+    };
+  });
+  return { step: state.unmaskStep, total, cards };
+}
+
+/** Votes stay anonymous, and while scores are sealed nobody sees points. */
+function privateReveal(r: RevealData, q: RoomQuestion, viewer: { role: "host" } | { role: "player"; pid: string }, sealed: boolean): RevealData {
+  let results = r.results;
+  if (q.kind === "men" || q.kind === "mostLikely") results = viewer.role === "player" ? results.filter((x) => x.playerId === viewer.pid) : [];
+  if (q.kind === "men") results = results.map((x) => ({ ...x, correct: false, points: 0 }));
+  if (sealed) results = results.map((x) => ({ ...x, points: 0 }));
+  return { ...r, results, teamResults: sealed ? [] : r.teamResults };
 }
 
 export function buildView(
@@ -771,12 +1028,22 @@ export function buildView(
 ): RoomView {
   const c = state.content;
   const name = c.honoree.name;
+  const sealed = !!c.scoring.hideScoresUntilEnd && state.phase !== "final";
   const players: PublicPlayer[] = Object.values(state.players)
     .sort((a, b) => a.joinedAt - b.joinedAt)
-    .map((p) => ({ id: p.id, name: p.name, team: p.team, isHonoree: p.isHonoree, online: online.has(p.id), score: playerScore(state, p.id), photo: p.photo }));
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      team: p.team,
+      isHonoree: p.isHonoree,
+      online: online.has(p.id),
+      score: sealed ? null : playerScore(state, p.id),
+      photo: profileOf(state, p)?.photo || p.photo,
+      profileId: p.profileId,
+    }));
   const q = state.current;
   const wagers = q ? state.wagers[q.key] : undefined;
-  const teams: PublicTeam[] = c.teams.map((t) => ({ id: t.id, name: t.name, score: teamScore(state, t.id), wager: wagers?.[t.id] ?? null, maxWager: maxWager(state, t.id) }));
+  const teams: PublicTeam[] = c.teams.map((t) => ({ id: t.id, name: t.name, score: sealed ? null : teamScore(state, t.id), wager: wagers?.[t.id] ?? null, maxWager: maxWager(state, t.id) }));
   const round = state.roundIndex >= 0 && state.rounds[state.roundIndex] ? state.rounds[state.roundIndex] : null;
   const isHost = viewer.role === "host";
   const me = viewer.role === "player" ? state.players[viewer.pid] : undefined;
@@ -784,8 +1051,10 @@ export function buildView(
 
   let question: RoomView["question"] = null;
   if (q) {
-    const { answer, accept, ...rest } = q;
-    question = showAnswer ? { ...rest, answer, accept } : rest;
+    // optionIds in Round 3 are the secret tokens: they never go to any screen.
+    const { answer, accept, optionIds, ...rest } = q;
+    const ids = q.kind === "men" ? undefined : optionIds;
+    question = showAnswer ? { ...rest, optionIds: ids, answer, accept } : { ...rest, optionIds: ids };
   }
 
   const answers = q ? state.answers[q.key] ?? {} : {};
@@ -803,7 +1072,7 @@ export function buildView(
       answer: q ? (isHerTurn ? state.honoreeAnswers[q.key] ?? null : answers[me.id]?.value ?? null) : null,
       eligible: eligible || isHerTurn,
       role: presubmitted ? "presubmitted" : isHerTurn ? "honoree" : eligible ? "guess" : "sitout",
-      photo: me.photo,
+      photo: profileOf(state, me)?.photo || me.photo,
     };
   }
 
@@ -833,7 +1102,7 @@ export function buildView(
     question,
     answeredIds: Object.keys(answers),
     eligibleIds: q ? Object.values(state.players).filter((p) => isEligible(q, p)).map((p) => p.id) : [],
-    reveal: q && state.phase === "reveal" ? buildReveal(state, q) : null,
+    reveal: q && state.phase === "reveal" ? privateReveal(buildReveal(state, q), q, viewer, sealed) : null,
     me: meView,
     confessionCount: state.confessions.length + c.confessions.length,
     myConfessions: me ? state.confessions.filter((x) => x.author === me.name).length : 0,
@@ -844,11 +1113,19 @@ export function buildView(
       const facts = c.honoree.facts.filter((f) => f.text.trim());
       return state.phase === "leaderboard" && facts.length ? fillName(facts[Math.max(0, state.roundIndex) % facts.length].text, name) : null;
     })(),
+    profiles: (c.players ?? []).map((pr) => {
+      const holder = Object.values(state.players).find((p) => p.profileId === pr.id);
+      return { id: pr.id, name: holder?.name ?? pr.name, photo: pr.photo, playerId: holder?.id ?? null, online: !!holder && online.has(holder.id), honoree: !!pr.honoree };
+    }),
+    teamsEnabled: !!c.teamsEnabled,
+    scoresHidden: sealed,
+    unmask: unmaskView(state),
   };
   if (isHost && q) {
     view.hostAnswers = Object.fromEntries(Object.entries(answers).map(([pid, a]) => [pid, a.value]));
     view.honoreeAnswered = state.honoreeAnswers[q.key] !== undefined || (q.kind === "honoreeVs" && q.answer !== undefined);
     view.placeholderWarning = !!q.placeholder;
+    view.allIn = everyoneAnswered(state);
   }
   return view;
 }

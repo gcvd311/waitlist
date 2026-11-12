@@ -1,8 +1,9 @@
+import { PAST40_BANK } from "./past40Bank";
 import { TRIVIA_BANK } from "./triviaBank";
 import type { Content, ContentQuestion } from "./types";
 
-// Everything about the birthday girl is a PLACEHOLDER until edited in /admin.
-// Nothing here is a fact about a real person.
+// Everything about Crystal and her friends is a PLACEHOLDER until edited in /admin.
+// Nothing here is a fact about a real person. Male names are invented characters.
 
 const ph = (id: string, prompt: string, extra: Partial<ContentQuestion> = {}): ContentQuestion => ({
   id,
@@ -21,9 +22,24 @@ const mc = (id: string, prompt: string, options: string[], extra: Partial<Conten
   ...extra,
 });
 
+export const GAME_TITLE = "40 & Questionable";
+export const SCHEMA_VERSION = 2;
+
+const MALE_NAMES = ["Chad", "Brad", "Todd", "Kyle", "Trent", "Lance"];
+
 export const DEFAULT_CONTENT: Content = {
+  schemaVersion: SCHEMA_VERSION,
+  players: MALE_NAMES.map((m, i) => ({
+    id: `girl-${i + 1}`,
+    name: i === 0 ? "Crystal" : `Friend ${i + 1}`,
+    photo: "",
+    maleName: m,
+    malePhotos: [],
+    honoree: i === 0,
+  })),
+  teamsEnabled: false,
   honoree: {
-    name: "The Birthday Girl",
+    name: "Crystal",
     tagline: "Forty, and entirely unrepentant.",
     photos: [],
     facts: [],
@@ -34,14 +50,17 @@ export const DEFAULT_CONTENT: Content = {
     { id: "jardin", name: "Côté Jardin" },
   ],
   rounds: [
-    { kind: "knowHer", enabled: true, title: "How Well Do You Know Her?", subtitle: "Forty years of evidence. Let’s see who was paying attention.", count: 8, timerSec: 45, points: 100 },
-    { kind: "trivia", enabled: true, title: "General Trivia", subtitle: "Everything you once knew and swore you’d never forget.", count: 12, timerSec: 20, points: 100 },
-    { kind: "whoSaid", enabled: true, title: "Who Said That?", subtitle: "Anonymous confessions. Not anonymous for long.", count: 8, timerSec: 30, points: 100 },
-    { kind: "mostLikely", enabled: true, title: "Most Likely To", subtitle: "Secret ballot. Public consequences.", count: 8, timerSec: 20, points: 50 },
-    { kind: "honoreeVs", enabled: true, title: "{name} vs. Everyone", subtitle: "She answers in private. You try to read her mind.", count: 6, timerSec: 30, points: 100 },
-    { kind: "final40", enabled: true, title: "The Final 40", subtitle: "Wager what you can afford to lose.", count: 6, timerSec: 30, points: 0 },
+    { kind: "knowHer", enabled: true, title: "Crystal Clear?", subtitle: "Forty years of evidence. Let’s see who was paying attention.", count: 10, timerSec: 45, points: 100 },
+    { kind: "past40", enabled: true, title: "The Past 40 Years", subtitle: "1986 to now, in order. Some of it you were too young for.", count: 10, timerSec: 20, points: 100 },
+    { kind: "men", enabled: true, title: "The Men of Questionable Taste", subtitle: "A lineup of gentlemen. Vote with your conscience, or don’t.", count: 10, timerSec: 0, points: 0, includeBonus: true },
+    { kind: "finale", enabled: true, title: "No Further Questions", subtitle: "Confessions, revelations, and one last question for the birthday girl.", count: 10, timerSec: 30, points: 100 },
+    { kind: "trivia", enabled: false, title: "General Trivia", subtitle: "Everything you once knew and swore you’d never forget.", count: 10, timerSec: 20, points: 100 },
+    { kind: "whoSaid", enabled: false, title: "Who Said That?", subtitle: "Anonymous confessions. Not anonymous for long.", count: 8, timerSec: 30, points: 100 },
+    { kind: "mostLikely", enabled: false, title: "Most Likely To", subtitle: "Secret ballot. Public consequences.", count: 8, timerSec: 20, points: 50 },
+    { kind: "honoreeVs", enabled: false, title: "{name} vs. Everyone", subtitle: "She answers in private. You try to read her mind.", count: 6, timerSec: 30, points: 100 },
+    { kind: "final40", enabled: false, title: "The Wager", subtitle: "Teams only. Wager what you can afford to lose.", count: 6, timerSec: 30, points: 0 },
   ],
-  scoring: { speedBonus: 50, surpriseMultiplier: 2, mostLikelyConsensus: 50, wagerFloor: 200 },
+  scoring: { speedBonus: 50, surpriseMultiplier: 2, mostLikelyConsensus: 50, wagerFloor: 200, menWinner: 100, menParticipation: 0, hideScoresUntilEnd: true, autoReveal: false },
   useBuiltInTrivia: true,
   triviaSeeded: true,
   triviaLevel: "harder",
@@ -59,6 +78,41 @@ export const DEFAULT_CONTENT: Content = {
       ph("kh-8", "What is {name}’s most passionately held pet peeve?"),
       ph("kh-9", "What does {name} secretly love?"),
       ph("kh-10", "Where was this photo taken? (Upload a photo in the admin.)", { image: "" }),
+      ph("9s4kqa", "What was Crystal's first pet?"),
+    ],
+    past40: PAST40_BANK.map((q) => ({ ...q })),
+    men: [
+      "Who would you actually date?",
+      "Who looks the most intellectual?",
+      "Who looks like he’d explain cryptocurrency to you at a party?",
+      "Who looks like he still lives with his mother?",
+      "Who looks like he’d ghost you after three dates?",
+      "Who looks like he’d have a secret second family?",
+      "Who looks like he’d describe himself as an entrepreneur?",
+      "Who looks like he’d ask you to split a €4 coffee?",
+      "Who looks like he’d be incredible in bed but terrible in a relationship?",
+      "Who looks like he’d say, “I’m not like other guys”?",
+    ]
+      .map((prompt, i): ContentQuestion => ({ id: `men-${i + 1}`, type: "vote", prompt }))
+      .concat([{ id: "men-kfm", type: "kfm", prompt: "Kill, Fuck, Marry.", bonus: true }]),
+    finale: [
+      { id: "fin-1", type: "mc", prompt: "", fromPool: true, optionsFrom: "players", note: "Who said that?" },
+      ph("fin-2", "Friendship story: write it here. Who is this about?", { type: "mc", optionsFrom: "players" }),
+      ph("fin-3", "What did {name} want to be when she grew up?", { askHer: true }),
+      { id: "fin-4", type: "mc", prompt: "", fromPool: true, optionsFrom: "players" },
+      ph("fin-5", "Unexpected revelation: write it here. Whose secret is it?", { type: "mc", optionsFrom: "players" }),
+      mc("fin-6", "{name}’s honest review of her thirties:", ["Five stars", "Would not repeat", "Character-building", "Classified"], { askHer: true }),
+      { id: "fin-7", type: "mc", prompt: "", fromPool: true, optionsFrom: "players" },
+      ph("fin-8", "Which of you has known {name} the longest?", { type: "mc", optionsFrom: "players" }),
+      ph("fin-9", "What is {name} most looking forward to in her forties?", { askHer: true }),
+      {
+        id: "fin-10",
+        type: "number",
+        prompt: "The last question. On her birthday, exactly how many days old is {name}?",
+        answer: 14610,
+        points: 400,
+        note: "Forty years and ten leap days. Happy birthday, {name}.",
+      },
     ],
     honoreeVs: [
       mc("hv-1", "{name}’s ideal Sunday:", ["A lunch that becomes dinner", "Bed, linen, a book", "A gallery and a long walk", "Something she won’t tell us about"]),

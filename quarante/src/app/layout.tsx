@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Quarante",
-  description: "A private party game for a fortieth.",
+  title: "40 & Questionable",
+  description: "A private party game for Crystal’s fortieth.",
   robots: { index: false, follow: false },
 };
 

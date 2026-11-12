@@ -4,8 +4,8 @@ import { useRouter } from "next/navigation";
 import { hostKey, playerKey, ROMAN, squarePhoto, store, teamColor, type PlayerCreds } from "@/lib/client";
 import { useRoom } from "@/hooks/useRoom";
 import { sfx } from "@/lib/sound";
-import { Avatar, MuteButton, PhotoPicker, Timer, Toast } from "@/components/ui";
-import { Bars, OptionLetter, revealHeadline, Standings, voteRows } from "@/components/game";
+import { Avatar, MuteButton, PhotoPicker, Portrait, Timer, Toast, TitleLockup } from "@/components/ui";
+import { Bars, KfmTable, Lineup, OptionLetter, Ranking, revealHeadline, Standings, voteRows } from "@/components/game";
 import HostRemote from "@/components/HostRemote";
 import type { RoomView } from "@/lib/types";
 
@@ -58,7 +58,7 @@ export default function PlayPage({ params }: { params: { code: string } }) {
 
   const me = view.me;
   const myTeam = view.teams.find((t) => t.id === me.team);
-  const myScore = view.players.find((p) => p.id === me.id)?.score ?? 0;
+  const myScore = view.players.find((p) => p.id === me.id)?.score ?? null;
 
   return (
     <Shell>
@@ -69,7 +69,7 @@ export default function PlayPage({ params }: { params: { code: string } }) {
           {me.isHonoree && <span className="label text-acid">Guest of honour</span>}
         </div>
         <div className="flex items-center gap-4 shrink-0">
-          <span className="font-mono text-sm tabular-nums">{myScore}</span>
+          {myScore !== null && <span className="font-mono text-sm tabular-nums">{myScore}</span>}
           <MuteButton />
         </div>
       </header>
@@ -152,14 +152,21 @@ function PlayerPhase({
       return <Question view={view} act={act} now={now} setToast={setToast} />;
     case "reveal":
       return <Reveal view={view} />;
+    case "unmask":
+      return <PhoneUnmask view={view} />;
     case "leaderboard":
-      return (
+      return view.scoresHidden ? (
+        <div className="flex-1 flex flex-col justify-center gap-6">
+          <p className="label anim-rise">Round {ROMAN[view.round?.index ?? 0]} complete</p>
+          <h1 className="display text-5xl anim-rise delay-1">
+            The scores are <span className="italic">sealed.</span>
+          </h1>
+          <p className="text-bone/55 anim-rise delay-2">Everything is being counted. All will be revealed at the end.</p>
+        </div>
+      ) : (
         <div className="flex-1 flex flex-col justify-center gap-10">
           <p className="label anim-rise">After round {ROMAN[view.round?.index ?? 0]}</p>
-          <Standings teams={view.teams} />
-          <p className="text-bone/50 text-sm">
-            You’re #{[...view.players].sort((a, b) => b.score - a.score).findIndex((p) => p.id === view.me!.id) + 1} of {view.players.length} individually.
-          </p>
+          {view.teamsEnabled ? <Standings teams={view.teams} /> : <Ranking players={view.players} highlight={view.me!.id} />}
         </div>
       );
     case "final":
@@ -167,30 +174,98 @@ function PlayerPhase({
   }
 }
 
+/** Every girl's portrait, marked READY once she has joined. Tappable when choosing your own. */
+function PortraitGrid({ view, onPick, mine }: { view: RoomView; onPick?: (id: string) => void; mine?: string }) {
+  return (
+    <div className="grid grid-cols-3 gap-3">
+      {view.profiles.map((pr, i) => {
+        const taken = !!pr.playerId;
+        return (
+          <button
+            key={pr.id}
+            type="button"
+            data-profile={pr.id}
+            disabled={!onPick || taken}
+            onClick={() => onPick?.(pr.id)}
+            className="text-left anim-rise disabled:cursor-default"
+            style={{ animationDelay: `${i * 60}ms` }}
+          >
+            <Portrait photo={pr.photo} name={pr.name} dim={!taken && !onPick} className={pr.id === mine ? "outline outline-[3px] outline-acid" : ""}>
+              <span
+                className={`absolute left-1.5 bottom-1.5 font-mono text-[10px] tracking-label px-1.5 py-0.5 ${
+                  taken ? "bg-acid text-ink" : "bg-ink/70 text-bone/60"
+                }`}
+              >
+                {taken ? (pr.online ? "READY" : "AWAY") : "WAITING"}
+              </span>
+            </Portrait>
+            <p className={`mt-1 text-sm truncate ${pr.id === mine ? "text-acid" : taken ? "" : "text-bone/45"}`}>{pr.name}</p>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function Lobby({ view, act, setToast, teamName }: { view: RoomView; act: ActFn; setToast: (s: string) => void; teamName: string }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const teammates = view.players.filter((p) => p.team === view.me!.team);
-  return (
-    <div className="flex-1 flex flex-col gap-12 pt-6">
-      <section>
-        <div className="mb-8 anim-rise">
-          <PhotoPicker
-            photo={view.me!.photo}
-            name={view.me!.name}
-            onPick={async (f) => {
-              const r = await act({ type: "photo", photo: await squarePhoto(f) });
-              if (!r.ok && r.message) setToast(r.message);
-            }}
-          />
+  const me = view.me!;
+  const myProfile = view.players.find((p) => p.id === me.id)?.profileId;
+  const usePortraits = view.profiles.length > 0;
+
+  if (usePortraits && !myProfile)
+    return (
+      <div className="flex-1 flex flex-col gap-8 pt-4">
+        <div>
+          <p className="label mb-2">Choose again</p>
+          <h1 className="display text-5xl">Tap your own photo.</h1>
         </div>
-        <p className="label mb-3 anim-rise">You’re in</p>
-        <h1 className="display text-6xl anim-rise delay-1">
-          <span className="italic">Team</span> {teamName}
-        </h1>
-        <p className="mt-4 text-bone/60 anim-rise delay-2">
-          {teammates.map((p) => p.name).join(", ")}
-        </p>
+        <PortraitGrid
+          view={view}
+          onPick={async (id) => {
+            const r = await act({ type: "claim", profileId: id });
+            if (!r.ok && r.message) setToast(r.message);
+            else sfx.lock();
+          }}
+        />
+      </div>
+    );
+
+  return (
+    <div className="flex-1 flex flex-col gap-12 pt-4">
+      <section>
+        <TitleLockup className="anim-rise mb-8" size="clamp(2.6rem, 13vw, 4rem)" />
+        {!usePortraits && (
+          <div className="mb-8 anim-rise">
+            <PhotoPicker
+              photo={me.photo}
+              name={me.name}
+              onPick={async (f) => {
+                const r = await act({ type: "photo", photo: await squarePhoto(f) });
+                if (!r.ok && r.message) setToast(r.message);
+              }}
+            />
+          </div>
+        )}
+        <p className="label mb-3 anim-rise">You’re in, {me.name}</p>
+        {view.teamsEnabled && (
+          <>
+            <h1 className="display text-5xl anim-rise delay-1">
+              <span className="italic">Team</span> {teamName}
+            </h1>
+            <p className="mt-3 text-bone/60 anim-rise delay-2">{teammates.map((p) => p.name).join(", ")}</p>
+          </>
+        )}
+        {usePortraits && (
+          <div className="mt-4">
+            <PortraitGrid view={view} mine={myProfile} />
+            <p className="label mt-4">
+              {view.profiles.filter((p) => p.playerId).length} of {view.profiles.length} here
+            </p>
+          </div>
+        )}
       </section>
 
       <section className="anim-rise delay-3">
@@ -343,7 +418,15 @@ function Question({ view, act, now, setToast }: { view: RoomView; act: ActFn; no
         )}
       </div>
 
-      {(q.type === "mc" || q.type === "vote") && (
+      {q.kind === "men" && q.type === "vote" && (
+        <div className="mt-auto">
+          <Lineup view={view} chosen={typeof chosen === "number" ? chosen : null} onPick={(i) => submit(i)} disabled={locked || pending !== null} />
+        </div>
+      )}
+
+      {q.type === "kfm" && <KfmPicker view={view} locked={locked} answer={me.answer as string | null} onSubmit={(v) => submit(v)} />}
+
+      {q.kind !== "men" && (q.type === "mc" || q.type === "vote") && (
         <div className="space-y-2 mt-auto">
           {q.options.map((opt, i) => {
             const active = chosen === i;
@@ -410,7 +493,13 @@ function Reveal({ view }: { view: RoomView }) {
   const mine = r.results.find((x) => x.playerId === me.id);
   const team = r.teamResults.find((t) => t.teamId === me.team);
   const verdict =
-    me.role !== "guess" ? null : !mine || mine.value === null ? "No answer." : mine.correct || mine.points > 0 ? "Correct." : "Not quite.";
+    me.role !== "guess" || q.kind === "men" || q.kind === "mostLikely"
+      ? null
+      : !mine || mine.value === null
+        ? "No answer."
+        : mine.correct || mine.points > 0
+          ? "Correct."
+          : "Not quite.";
 
   return (
     <div className="flex-1 flex flex-col justify-center gap-8">
@@ -428,7 +517,7 @@ function Reveal({ view }: { view: RoomView }) {
         </p>
       )}
       <div className="anim-rise delay-2">
-        <p className="label mb-2">{q.kind === "mostLikely" ? "The room has spoken" : "The answer"}</p>
+        <p className="label mb-2">{q.kind === "men" ? "The room’s choice" : q.kind === "mostLikely" ? "The room has spoken" : "The answer"}</p>
         <p className="display text-4xl">{revealHeadline(view)}</p>
         {r.note && <p className="mt-3 text-bone/55 font-serif italic text-xl">{r.note}</p>}
       </div>
@@ -437,7 +526,8 @@ function Reveal({ view }: { view: RoomView }) {
           <Bars rows={voteRows(view)} highlight={(i) => r.voteWinners?.includes(voteRows(view)[i].label) ?? false} />
         </div>
       )}
-      {mine && mine.value !== null && q.type !== "vote" && (
+      {q.type === "kfm" && <KfmTable reveal={r} />}
+      {mine && mine.value !== null && q.type !== "vote" && q.type !== "kfm" && (
         <p className="text-bone/50 text-sm">You said: <span className="font-serif italic text-lg text-bone/80">{mine.display}</span></p>
       )}
     </div>
@@ -445,23 +535,135 @@ function Reveal({ view }: { view: RoomView }) {
 }
 
 function Final({ view }: { view: RoomView }) {
-  const sorted = [...view.teams].sort((a, b) => b.score - a.score);
-  const winner = sorted[0];
-  const mine = view.me!.team === winner?.id;
+  if (view.teamsEnabled) {
+    const sorted = [...view.teams].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    const winner = sorted[0];
+    const mine = view.me!.team === winner?.id;
+    return (
+      <div className="flex-1 flex flex-col justify-center gap-10">
+        <TitleLockup size="clamp(2.4rem, 12vw, 3.6rem)" className="anim-rise" />
+        {view.tie ? (
+          <h1 className="display text-5xl anim-rise delay-1">
+            A dead heat. <span className="italic">Tie-breaker incoming.</span>
+          </h1>
+        ) : (
+          <h1 className="display text-5xl anim-rise delay-1">
+            <span className="italic">{winner?.name}</span> take it.{mine && <span className="block text-acid text-3xl mt-3">That’s you.</span>}
+          </h1>
+        )}
+        <Standings teams={view.teams} />
+        <p className="display text-3xl italic text-bone/70">Happy fortieth, {view.honoree.name}.</p>
+      </div>
+    );
+  }
+  const sorted = [...view.players].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  const n = sorted.length;
   return (
-    <div className="flex-1 flex flex-col justify-center gap-10">
-      <p className="label anim-rise">Final</p>
+    <div className="flex-1 flex flex-col justify-center gap-8">
+      <TitleLockup size="clamp(2.4rem, 12vw, 3.6rem)" className="anim-rise" />
+      <p className="label">The final scores</p>
+      <Ranking players={view.players} highlight={view.me!.id} />
       {view.tie ? (
-        <h1 className="display text-6xl anim-rise delay-1">
-          A dead heat. <span className="italic">Tie-breaker incoming.</span>
-        </h1>
+        <p className="display text-4xl italic anim-rise" style={{ animationDelay: `${n * 650}ms` }}>
+          A dead heat. Tie-breaker incoming.
+        </p>
       ) : (
-        <h1 className="display text-6xl anim-rise delay-1">
-          <span className="italic">{winner?.name}</span> take it.{mine && <span className="block text-acid text-4xl mt-3">That’s you.</span>}
-        </h1>
+        <p className="display text-4xl anim-rise" style={{ animationDelay: `${n * 650}ms` }}>
+          <span className="italic">{sorted[0]?.name}</span> wins.
+          {sorted[0]?.id === view.me!.id && <span className="block text-acid text-3xl mt-2">That’s you.</span>}
+        </p>
       )}
-      <Standings teams={view.teams} />
-      <p className="display text-3xl italic text-bone/70 anim-rise delay-4">Happy fortieth, {view.honoree.name}.</p>
+      <p className="display text-3xl italic text-bone/70 anim-rise" style={{ animationDelay: `${n * 650 + 600}ms` }}>
+        Happy fortieth, {view.honoree.name}.
+      </p>
+    </div>
+  );
+}
+
+/** Kill / F / Marry: give each of the three men a different fate. */
+function KfmPicker({ view, locked, answer, onSubmit }: { view: RoomView; locked: boolean; answer: string | null; onSubmit: (v: string) => void }) {
+  const q = view.question!;
+  const fates = ["Kill", "Fuck", "Marry"] as const;
+  const [picks, setPicks] = useState<(number | null)[]>(() => (answer ? answer.split(",").map(Number) : [null, null, null]));
+  const fateOf = (i: number) => picks.findIndex((x) => x === i);
+  const ready = picks.every((x) => x !== null);
+  return (
+    <div className="mt-auto space-y-4">
+      {q.options.map((name, i) => {
+        const f = fateOf(i);
+        return (
+          <div key={i} className="flex gap-3 items-center anim-rise" style={{ animationDelay: `${i * 80}ms` }}>
+            <Portrait photo={q.optionPhotos?.[i]} name={name} className="w-20 shrink-0" />
+            <div className="flex-1">
+              <p className="font-serif text-2xl mb-2">{name}</p>
+              <div className="flex gap-1.5">
+                {fates.map((label, k) => (
+                  <button
+                    key={label}
+                    data-kfm={`${i}-${k}`}
+                    disabled={locked}
+                    onClick={() => setPicks((p) => p.map((x, j) => (j === k ? i : x === i ? null : x)))}
+                    className={`btn-sm border flex-1 ${f === k ? "bg-acid text-ink border-acid" : "border-bone/20 text-bone/70"}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+      {!locked && (
+        <button className="btn-acid w-full py-4" disabled={!ready} onClick={() => onSubmit(picks.join(","))}>
+          Seal their fates
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** The phone follows the big screen through the unmasking. */
+function PhoneUnmask({ view }: { view: RoomView }) {
+  const u = view.unmask!;
+  const card = u.step >= 1 && u.step <= u.total ? u.cards[u.step - 1] : null;
+  if (u.step === 0)
+    return (
+      <div className="flex-1 flex flex-col justify-center">
+        <p className="label mb-3">The unmasking</p>
+        <h1 className="display text-5xl">
+          Who were these men, <span className="italic">really?</span>
+        </h1>
+      </div>
+    );
+  if (!card)
+    return (
+      <div className="flex-1 flex flex-col gap-4 pt-4">
+        <p className="label">The full lineup</p>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-5">
+          {u.cards.map((c) => (
+            <div key={c.token} className="grid grid-cols-2 gap-1">
+              <Portrait photo={c.malePhoto} name={c.maleName} />
+              <Portrait photo={c.femalePhoto} name={c.femaleName ?? "?"} />
+              <p className="col-span-2 text-sm">
+                {c.maleName} <span className="text-bone/40">is</span> <span className="text-acid">{c.femaleName}</span>
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  return (
+    <div className="flex-1 flex flex-col justify-center gap-5" key={card.token}>
+      <p className="label">
+        {u.step} of {u.total} · {card.votes} vote{card.votes === 1 ? "" : "s"}
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        <Portrait photo={card.malePhoto} name={card.maleName} className="anim-rise" />
+        <Portrait photo={card.femalePhoto} name={card.femaleName ?? "?"} className="anim-rise delay-5" />
+      </div>
+      <h1 className="display text-5xl anim-rise delay-5">
+        {card.maleName} <span className="italic text-bone/50">is</span> <span className="text-acid">{card.femaleName}</span>
+      </h1>
     </div>
   );
 }

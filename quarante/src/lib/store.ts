@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { DEFAULT_CONTENT } from "./defaultContent";
-import { TRIVIA_BANK } from "./triviaBank";
+import { mergeContent } from "./contentMerge";
+export { mergeContent };
 import { GameError, ONLINE_WINDOW_MS } from "./engine";
 import type { Content, RoomState } from "./types";
 
@@ -43,27 +43,6 @@ export function newCode(): string {
 
 // ───────────────────────── content ─────────────────────────
 
-export function mergeContent(raw: Partial<Content> | null | undefined): Content {
-  const d = structuredClone(DEFAULT_CONTENT);
-  if (!raw) return d;
-  const merged: Content = {
-    ...d,
-    ...raw,
-    honoree: { ...d.honoree, ...(raw.honoree ?? {}) },
-    scoring: { ...d.scoring, ...(raw.scoring ?? {}) },
-    questions: { ...d.questions, ...(raw.questions ?? {}) },
-    rounds: raw.rounds?.length ? raw.rounds : d.rounds,
-    teams: raw.teams?.length ? raw.teams : d.teams,
-    honoreeAnswers: raw.honoreeAnswers ?? {},
-  };
-  // Older saves kept the starter trivia outside the content; fold it in so every question is editable.
-  if (!raw.triviaSeeded) {
-    merged.questions.trivia = [...(raw.questions?.trivia ?? []), ...(raw.useBuiltInTrivia === false ? [] : TRIVIA_BANK.map((q) => ({ ...q })))];
-    merged.triviaSeeded = true;
-  }
-  return merged;
-}
-
 export async function getContent(): Promise<Content> {
   if (!hasSupabase()) return mergeContent(mem.content);
   const { data, error } = await sb().from("game_content").select("content").eq("id", "default").maybeSingle();
@@ -94,10 +73,48 @@ export async function uploadPhoto(dataUrl: string): Promise<string> {
   if (!m) throw new GameError("Unsupported image.");
   if (!hasSupabase()) return dataUrl; // local mode keeps the (already resized) image inline
   const ext = m[1].split("/")[1];
-  const path = `photos/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-  const { error } = await sb().storage.from("party").upload(path, Buffer.from(m[2], "base64"), { contentType: m[1], upsert: false });
+  const path = `photos/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+  const { error } = await sb().storage.from(BUCKET).upload(path, Buffer.from(m[2], "base64"), { contentType: m[1], upsert: false });
   if (error) throw new GameError(`Upload failed: ${error.message}`, 500);
-  return sb().storage.from("party").getPublicUrl(path).data.publicUrl;
+  return `sb://${path}`; // a private reference; screens get short-lived signed links
+}
+
+// ───────────────────────── private photos ─────────────────────────
+// Photos live in a private bucket. Stored content holds "sb://path" references;
+// every response swaps them for signed links that expire, and saves swap them back.
+
+const BUCKET = "party";
+const SIGN_SECONDS = 6 * 3600;
+const signed = new Map<string, { url: string; exp: number }>();
+
+function collect(v: unknown, out: Set<string>) {
+  if (typeof v === "string") {
+    if (v.startsWith("sb://")) out.add(v);
+  } else if (Array.isArray(v)) v.forEach((x) => collect(x, out));
+  else if (v && typeof v === "object") Object.values(v).forEach((x) => collect(x, out));
+}
+
+export async function resolvePhotos<T>(obj: T): Promise<T> {
+  if (!hasSupabase()) return obj;
+  const refs = new Set<string>();
+  collect(obj, refs);
+  if (!refs.size) return obj;
+  const soon = Date.now() + 15 * 60_000;
+  const need = [...refs].filter((r) => !((signed.get(r)?.exp ?? 0) > soon));
+  if (need.length) {
+    const { data } = await sb().storage.from(BUCKET).createSignedUrls(need.map((r) => r.slice(5)), SIGN_SECONDS);
+    (data ?? []).forEach((d, i) => d.signedUrl && signed.set(need[i], { url: d.signedUrl, exp: Date.now() + SIGN_SECONDS * 1000 }));
+  }
+  return JSON.parse(JSON.stringify(obj), (_k, v) => (typeof v === "string" && v.startsWith("sb://") ? signed.get(v)?.url ?? "" : v));
+}
+
+/** Turn signed (or older public) storage links back into references before saving. */
+export function unresolvePhotos<T>(obj: T): T {
+  return JSON.parse(JSON.stringify(obj), (_k, v) => {
+    if (typeof v !== "string") return v;
+    const m = /\/storage\/v1\/object\/(?:sign|public)\/party\/([^?]+)/.exec(v);
+    return m && v.startsWith("http") ? `sb://${decodeURIComponent(m[1])}` : v;
+  });
 }
 
 // ───────────────────────── rooms ─────────────────────────

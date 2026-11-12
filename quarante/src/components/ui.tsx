@@ -6,9 +6,50 @@ import { useNow } from "@/hooks/useRoom";
 
 export function Wordmark({ className = "" }: { className?: string }) {
   return (
-    <span className={`font-serif italic tracking-tight ${className}`}>
-      Quarante<span className="text-acid not-italic">.</span>
+    <span className={`font-serif tracking-tight whitespace-nowrap ${className}`}>
+      40 <span className="italic text-acid">&amp;</span> <span className="italic">Questionable</span>
     </span>
+  );
+}
+
+/** The full title lockup for the welcome, lobby and final screens. */
+export function TitleLockup({ className = "", size = "clamp(3.4rem, 15vw, 9rem)" }: { className?: string; size?: string }) {
+  return (
+    <h1 className={`display leading-[0.86] ${className}`} style={{ fontSize: size }}>
+      <span className="block">
+        40 <span className="italic text-acid">&amp;</span>
+      </span>
+      <span className="block italic">Questionable</span>
+    </h1>
+  );
+}
+
+/** A consistent portrait frame: 4:5, cover-cropped, initial when empty. */
+export function Portrait({
+  photo,
+  name,
+  className = "",
+  dim = false,
+  children,
+}: {
+  photo?: string;
+  name: string;
+  className?: string;
+  dim?: boolean;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className={`relative aspect-[4/5] overflow-hidden bg-claret ${className}`}>
+      {photo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={photo} alt="" className={`absolute inset-0 w-full h-full object-cover transition duration-500 ${dim ? "grayscale opacity-45" : ""}`} />
+      ) : (
+        <span className={`absolute inset-0 grid place-items-center font-serif italic text-bone/60 text-5xl ${dim ? "opacity-40" : ""}`}>
+          {name.trim().charAt(0).toUpperCase() || "?"}
+        </span>
+      )}
+      {children}
+    </div>
   );
 }
 
@@ -162,5 +203,84 @@ export function PhotoPicker({ photo, name, onPick, size = 88 }: { photo?: string
         }}
       />
     </label>
+  );
+}
+
+/**
+ * Square-ish cropper used everywhere a portrait is uploaded: drag to position, slide to zoom.
+ * Output is always 4:5 at 800×1000, so every portrait sits the same way in every frame.
+ */
+export function Cropper({ file, onDone, onCancel }: { file: File; onDone: (dataUrl: string) => void; onCancel: () => void }) {
+  const [img, setImg] = useState<HTMLImageElement | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [pos, setPos] = useState({ x: 0.5, y: 0.5 });
+  const drag = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
+  const boxW = 280;
+  const boxH = 350;
+
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    const i = new Image();
+    i.onload = () => setImg(i);
+    i.src = url;
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  if (!img) return null;
+  const base = Math.max(boxW / img.width, boxH / img.height);
+  const scale = base * zoom;
+  const w = img.width * scale;
+  const h = img.height * scale;
+  const left = -(w - boxW) * pos.x;
+  const top = -(h - boxH) * pos.y;
+
+  function finish() {
+    const outW = 800;
+    const outH = 1000;
+    const canvas = document.createElement("canvas");
+    canvas.width = outW;
+    canvas.height = outH;
+    const k = outW / boxW;
+    canvas.getContext("2d")!.drawImage(img!, left * k, top * k, w * k, h * k);
+    onDone(canvas.toDataURL("image/jpeg", 0.85));
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-ink/90 backdrop-blur grid place-items-center p-4">
+      <div className="bg-wine border border-bone/15 p-5 w-full max-w-sm">
+        <p className="label mb-3">Position the photo</p>
+        <div
+          className="relative mx-auto overflow-hidden bg-ink touch-none cursor-move select-none"
+          style={{ width: boxW, height: boxH }}
+          onPointerDown={(e) => {
+            (e.target as HTMLElement).setPointerCapture(e.pointerId);
+            drag.current = { x: e.clientX, y: e.clientY, px: pos.x, py: pos.y };
+          }}
+          onPointerMove={(e) => {
+            const d = drag.current;
+            if (!d) return;
+            const nx = w > boxW ? d.px - (e.clientX - d.x) / (w - boxW) : 0.5;
+            const ny = h > boxH ? d.py - (e.clientY - d.y) / (h - boxH) : 0.5;
+            setPos({ x: Math.max(0, Math.min(1, nx)), y: Math.max(0, Math.min(1, ny)) });
+          }}
+          onPointerUp={() => (drag.current = null)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={img.src} alt="" draggable={false} className="absolute max-w-none pointer-events-none" style={{ left, top, width: w, height: h }} />
+        </div>
+        <label className="block mt-4">
+          <span className="label">Zoom</span>
+          <input type="range" min={1} max={3} step={0.01} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} className="w-full" />
+        </label>
+        <div className="flex gap-2 mt-4">
+          <button className="btn-ghost btn-sm flex-1" onClick={onCancel}>
+            Cancel
+          </button>
+          <button className="btn-acid btn-sm flex-1" onClick={finish}>
+            Use photo
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

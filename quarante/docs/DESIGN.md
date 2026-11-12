@@ -1,4 +1,8 @@
-# Quarante: design notes
+# 40 & Questionable: design notes
+
+> Update: the game is now **40 & Questionable**, four rounds of ten (Crystal Clear?, The Past 40 Years, The Men of Questionable Taste, No Further Questions), individual scoring sealed until the end, portrait-based joining, and a server-protected men’s round with an unmasking. The sections below describe the engine those rounds run on; the README has the current structure.
+
+# Original design notes
 
 ## 1. Concept
 

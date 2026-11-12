@@ -24,6 +24,11 @@ content.honoree.name = "Test Honoree";
 content.questions.knowHer = content.questions.knowHer.map((q) => (q.type === "text" ? { ...q, answer: "Bookshop", placeholder: false } : q));
 content.questions.final40 = content.questions.final40.map((q) => (q.type === "text" ? { ...q, answer: "Lisbon" } : q));
 content.confessions = [{ id: "c1", author: "Ana", text: "I have never seen Titanic." }];
+// The original suite exercises teams, auto-reveal and visible scores: switch those on here.
+content.teamsEnabled = true;
+content.scoring.autoReveal = true;
+content.scoring.hideScoresUntilEnd = false;
+content.rounds = content.rounds.map((r) => ({ ...r, enabled: true }));
 
 const s: RoomState = createRoomState("TEST", content, now());
 const names = ["Ana", "Bea", "Cleo", "Dora", "Eva", "Flo", "Gia", "Hana", "Ines", "Jo"];
@@ -50,7 +55,7 @@ ok(!s.rounds[0].questions.some((q) => q.image === ""), "picture placeholder with
 
 let guard = 0;
 while (s.phase !== "final" && guard++ < 400) {
-  if (s.phase === "round_intro" || s.phase === "leaderboard" || s.phase === "reveal") {
+  if (s.phase === "round_intro" || s.phase === "leaderboard" || s.phase === "reveal" || s.phase === "unmask") {
     applyHostAction(s, { type: "next" }, now());
     continue;
   }
@@ -65,7 +70,7 @@ while (s.phase !== "final" && guard++ < 400) {
   const before = s.phase;
   ids.forEach((pid, i) => {
     const p = s.players[pid];
-    const answer = q.type === "text" ? (i % 2 ? "bookshop " : "no idea") : q.type === "number" ? 2000 + i : i % Math.max(1, q.options.length);
+    const answer = q.type === "kfm" ? "2,0,1" : q.type === "text" ? (i % 2 ? "bookshop " : "no idea") : q.type === "number" ? 2000 + i : i % Math.max(1, q.options.length);
     try {
       applyPlayerAction(s, pid, { type: "answer", key: q.key, value: answer }, now());
     } catch (e) {
@@ -74,7 +79,7 @@ while (s.phase !== "final" && guard++ < 400) {
     }
   });
   if (s.phase === "question") {
-    // e.g. nobody eligible; move on via the host
+    // nobody eligible, or Round 3 (the host always closes the vote)
     applyHostAction(s, { type: "reveal" }, now());
   }
   ok(phase(s) === "reveal", `auto-reveal after all answered (${q.kind}, was ${before})`);
@@ -86,7 +91,7 @@ while (s.phase !== "final" && guard++ < 400) {
 ok(s.phase === "final", "reached the final");
 const view = buildView(s, { role: "host" }, now(), online);
 ok(view.teams.length === 2, "final standings");
-ok(view.teams.every((x) => x.score >= 0), "wager losses never push a team below zero");
+ok(view.teams.every((x) => (x.score ?? 0) >= 0), "wager losses never push a team below zero");
 console.log("scores:", view.teams.map((x) => `${x.name} ${x.score}`).join(" / "));
 
 // Duplicate submission during a question is idempotent

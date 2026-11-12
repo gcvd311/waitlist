@@ -1,23 +1,18 @@
 import Link from "next/link";
-import { Wordmark } from "@/components/ui";
+import { TitleLockup } from "@/components/ui";
 
 export default function Home() {
   return (
     <main className="min-h-[100dvh] flex flex-col px-6 pt-8 pb-10 max-w-xl mx-auto">
       <header className="flex justify-between items-baseline">
-        <Wordmark className="text-2xl" />
         <span className="label">A private game</span>
+        <span className="label">1986 – 2026</span>
       </header>
 
-      <section className="flex-1 flex flex-col justify-center py-16">
-        <p className="label mb-6 anim-rise">For a fortieth</p>
-        <h1 className="display text-[19vw] sm:text-[7.5rem] anim-rise delay-1">
-          Forty<span className="italic text-acid">,</span>
-          <br />
-          <span className="italic">and still</span>
-          <br />
-          the question.
-        </h1>
+      <section className="flex-1 flex flex-col justify-center py-14">
+        <p className="label mb-6 anim-rise">For Crystal’s fortieth</p>
+        <TitleLockup className="anim-rise delay-1" size="clamp(4rem, 21vw, 9.5rem)" />
+        <p className="font-serif italic text-2xl text-bone/60 mt-6 anim-rise delay-2">Forty questions. Four rounds. No further questions.</p>
       </section>
 
       <nav className="space-y-3 anim-rise delay-3">

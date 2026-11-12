@@ -4,8 +4,8 @@ import Link from "next/link";
 import { hostKey, LETTERS, ROMAN, store, teamColor } from "@/lib/client";
 import { useRoom } from "@/hooks/useRoom";
 import { sfx } from "@/lib/sound";
-import { Avatar, MuteButton, PromptText, QR, TeamDot, Timer, Toast, Wordmark } from "@/components/ui";
-import { Bars, revealHeadline, RevealResultList, Standings, TopPlayers, voteRows } from "@/components/game";
+import { Avatar, MuteButton, Portrait, PromptText, QR, TeamDot, Timer, TitleLockup, Toast, Wordmark } from "@/components/ui";
+import { Bars, KfmTable, Lineup, Ranking, screenGrid, revealHeadline, RevealResultList, Standings, TopPlayers, voteRows } from "@/components/game";
 import type { RoomView } from "@/lib/types";
 
 type Act = ReturnType<typeof useRoom>["act"];
@@ -39,7 +39,7 @@ export default function HostPage({ params }: { params: { code: string } }) {
     [act],
   );
 
-  useHostAutomation(view, run);
+  useHostAutomation(view, run, false);
   useHostSounds(view);
 
   useEffect(() => {
@@ -118,10 +118,11 @@ export default function HostPage({ params }: { params: { code: string } }) {
 }
 
 /** Reveal when the clock runs out, or a beat after the last online player answers. */
-function useHostAutomation(view: RoomView | null, run: (a: Record<string, unknown>) => void) {
+function useHostAutomation(view: RoomView | null, run: (a: Record<string, unknown>) => void, autoReveal = false) {
   const pending = useRef<string | null>(null);
   useEffect(() => {
     if (!view || view.phase !== "question" || view.paused || !view.question) return;
+    if (!autoReveal || view.question.kind === "men") return; // the host closes it
     const onlineEligible = view.players.filter((p) => p.online && view.eligibleIds.includes(p.id));
     const herPending = view.question.kind === "honoreeVs" && view.players.some((p) => p.isHonoree && p.online) && !view.honoreeAnswered;
     const allIn = onlineEligible.length > 0 && onlineEligible.every((p) => view.answeredIds.includes(p.id)) && !herPending;
@@ -161,6 +162,8 @@ function Stage({ view, run, now }: { view: RoomView; run: Act | ((a: Record<stri
       return <QuestionStage view={view} now={now} run={run} />;
     case "reveal":
       return <RevealStage view={view} run={run} />;
+    case "unmask":
+      return <UnmaskStage view={view} />;
     case "leaderboard":
       return <LeaderboardStage view={view} />;
     case "final":
@@ -174,8 +177,9 @@ function Lobby({ view, run }: { view: RoomView; run: (a: Record<string, unknown>
   useEffect(() => setOrigin(window.location.origin), []);
   const joinUrl = `${origin}/join/${view.code}`;
   return (
-    <div className="flex-1 grid lg:grid-cols-[1.1fr_1fr] gap-12 items-center">
+    <div className="flex-1 grid lg:grid-cols-[1fr_1.15fr] gap-12 items-center">
       <div>
+        <TitleLockup className="anim-rise mb-10" size="clamp(3.2rem, 6.4vw, 6.8rem)" />
         <p className="label mb-5 anim-rise">Scan, or go to {origin.replace(/^https?:\/\//, "")}/join</p>
         <div className="flex items-end gap-8 flex-wrap">
           {origin && <QR value={joinUrl} size={210} className="anim-rise delay-1" />}
@@ -184,16 +188,64 @@ function Lobby({ view, run }: { view: RoomView; run: (a: Record<string, unknown>
             <p className="font-mono text-[clamp(4rem,10vw,9rem)] leading-none tracking-[0.12em]">{view.code}</p>
           </div>
         </div>
-        <h1 className="display text-[clamp(2.5rem,5vw,5rem)] mt-12 anim-rise delay-3">
-          Tonight, everything <span className="italic">about {view.honoree.name}</span> is on the record.
-        </h1>
-        <p className="mt-6 text-bone/50 anim-rise delay-4">
+        <p className="mt-10 text-bone/50 anim-rise delay-4">
           {view.confessionCount} confession{view.confessionCount === 1 ? "" : "s"} in the vault. Players can add more from their phones while you wait.
         </p>
       </div>
 
-      <div className="grid sm:grid-cols-2 gap-8 self-stretch content-center">
-        {view.teams.map((t) => {
+      {view.profiles.length > 0 && (
+        <div>
+          <div className="flex justify-between items-baseline mb-4">
+            <p className="label">Tap your photo on your phone</p>
+            <p className="label">
+              {view.profiles.filter((p) => p.playerId).length} / {view.profiles.length} ready
+            </p>
+          </div>
+          <div className={`grid gap-4 ${view.profiles.length > 6 ? "grid-cols-4 xl:grid-cols-5" : "grid-cols-3"}`}>
+            {view.profiles.map((pr, i) => {
+              const taken = !!pr.playerId;
+              return (
+                <div key={pr.id} className="relative anim-rise" style={{ animationDelay: `${i * 70}ms` }}>
+                  <button className="block w-full text-left" onClick={() => taken && setMenu(menu === pr.id ? null : pr.id)}>
+                    <Portrait photo={pr.photo} name={pr.name} dim={!taken}>
+                      <span
+                        className={`absolute left-2 bottom-2 font-mono text-[11px] tracking-label px-2 py-1 transition ${
+                          taken ? "bg-acid text-ink" : "bg-ink/70 text-bone/60 anim-pulse"
+                        }`}
+                      >
+                        {taken ? (pr.online ? "READY" : "AWAY") : "WAITING"}
+                      </span>
+                      {pr.honoree && <span className="absolute right-2 top-2 label text-acid bg-ink/70 px-1.5 py-0.5">Birthday</span>}
+                    </Portrait>
+                    <p className={`mt-2 text-xl font-serif ${taken ? "" : "text-bone/40"}`}>{pr.name}</p>
+                  </button>
+                  {menu === pr.id && pr.playerId && (
+                    <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-wine border border-bone/15 p-2 flex flex-col gap-1.5 anim-fade">
+                      <button className="btn-ghost btn-sm" onClick={() => (run({ type: "release", playerId: pr.playerId }), setMenu(null))}>
+                        Unlock portrait
+                      </button>
+                      <button
+                        className="btn-ghost btn-sm text-rouge"
+                        onClick={() => confirm(`Remove ${pr.name} from the game?`) && (run({ type: "kick", playerId: pr.playerId }), setMenu(null))}
+                      >
+                        Remove player
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {view.players.some((p) => !p.profileId) && (
+            <p className="mt-6 text-bone/50 text-sm">
+              Still choosing a photo: {view.players.filter((p) => !p.profileId).map((p) => p.name).join(", ")}
+            </p>
+          )}
+        </div>
+      )}
+
+      {(view.profiles.length === 0 || view.teamsEnabled) && <div className="grid sm:grid-cols-2 gap-8 self-stretch content-center">
+        {view.teams.filter((t) => view.teamsEnabled || t.id === view.teams[0]?.id).map((t) => {
           const members = view.players.filter((p) => p.team === t.id);
           return (
             <div key={t.id}>
@@ -234,7 +286,7 @@ function Lobby({ view, run }: { view: RoomView; run: (a: Record<string, unknown>
             </div>
           );
         })}
-      </div>
+      </div>}
     </div>
   );
 }
@@ -318,6 +370,28 @@ function AnswerTally({ view }: { view: RoomView }) {
 function QuestionStage({ view, now, run }: { view: RoomView; now: () => number; run: (a: Record<string, unknown>) => void }) {
   const q = view.question!;
   const many = q.options.length > 4;
+  if (q.kind === "men")
+    return (
+      <div className="flex-1 flex flex-col">
+        <div className="flex justify-between items-baseline">
+          <p className="label">
+            {q.bonus ? "Bonus" : `${view.round!.qIndex + 1} / ${view.round!.qCount}`} · votes are anonymous
+          </p>
+          <span className="text-5xl">
+            <Timer variant="number" deadline={view.deadline} total={q.timerSec} now={now} paused={view.paused} pausedRemaining={view.pausedRemaining} onExpire={() => run({ type: "timeout" })} />
+          </span>
+        </div>
+        <div className="mt-3">
+          <Timer deadline={view.deadline} total={q.timerSec} now={now} paused={view.paused} pausedRemaining={view.pausedRemaining} ticks />
+        </div>
+        <h1 className="display text-[clamp(2.2rem,4.4vw,4.8rem)] my-8 max-w-[30ch] anim-rise">{q.prompt}</h1>
+        {q.type === "kfm" && <p className="font-serif italic text-2xl text-bone/55 -mt-4 mb-8">Three men. Three fates. Decide on your phone.</p>}
+        <div className="flex-1 mb-6">
+          <Lineup view={view} large />
+        </div>
+        <AnswerTally view={view} />
+      </div>
+    );
   return (
     <div className="flex-1 flex flex-col">
       <div className="flex justify-between items-baseline">
@@ -372,13 +446,16 @@ function RevealStage({ view, run }: { view: RoomView; run: (a: Record<string, un
     <div className="flex-1 flex flex-col gap-10">
       <div>
         <p className="label mb-3 text-bone/60 truncate">{q.kind === "whoSaid" ? `“${q.prompt}”` : q.prompt}</p>
-        <p className="label mb-2">{q.kind === "mostLikely" ? "The room has spoken" : q.kind === "honoreeVs" ? "Straight from her" : "The answer"}</p>
+        <p className="label mb-2">{q.kind === "men" ? "The room’s choice" : q.kind === "mostLikely" ? "The room has spoken" : q.kind === "honoreeVs" ? "Straight from her" : "The answer"}</p>
         <h1 className="display text-[clamp(3rem,7vw,7.5rem)] anim-rise">{revealHeadline(view)}</h1>
         {r.surprise && <p className="label text-acid mt-3">Surprise bonus · only a few saw that coming</p>}
         {r.note && <p className="font-serif italic text-2xl text-bone/55 mt-4 anim-rise delay-2">{r.note}</p>}
       </div>
 
-      {q.type === "vote" && (
+      {q.kind === "men" && q.type === "vote" && <MenResults view={view} />}
+      {q.type === "kfm" && <KfmTable reveal={r} large />}
+
+      {q.kind !== "men" && q.type === "vote" && (
         <div className="max-w-4xl w-full">
           <Bars large rows={voteRows(view).slice(0, 6)} highlight={(i) => r.voteWinners?.includes(voteRows(view)[i].label) ?? false} />
         </div>
@@ -426,13 +503,136 @@ function RevealStage({ view, run }: { view: RoomView; run: (a: Record<string, un
   );
 }
 
+/** Round 3 results: the lineup re-sorted by votes, counts ticking up, the winner lit. */
+function MenResults({ view }: { view: RoomView }) {
+  const q = view.question!;
+  const r = view.reveal!;
+  const rows = q.options.map((name, i) => ({ name, i, n: r.distribution[i] ?? 0, photo: q.optionPhotos?.[i] })).sort((a, b) => b.n - a.n);
+  const max = Math.max(0, ...rows.map((x) => x.n));
+  const { cols, maxWidth } = screenGrid(rows.length, 330);
+  return (
+    <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, maxWidth }}>
+      {rows.map((x, k) => {
+        const win = x.n === max && max > 0;
+        return (
+          <div key={x.i} className="anim-rise" style={{ animationDelay: `${(rows.length - 1 - k) * 220}ms` }}>
+            <Portrait photo={x.photo} name={x.name} dim={!win} className={win ? "outline outline-4 outline-acid" : ""}>
+              <span className={`absolute right-2 bottom-2 font-mono text-4xl px-2 ${win ? "bg-acid text-ink" : "bg-ink/70 text-bone"}`}>{x.n}</span>
+            </Portrait>
+            <p className={`mt-2 display text-[clamp(1.2rem,2vw,2rem)] ${win ? "text-acid" : "text-bone/60"}`}>{x.name}</p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** The unmasking: each man, then the girl behind him. The biggest moment of the night. */
+function UnmaskStage({ view }: { view: RoomView }) {
+  const u = view.unmask!;
+  if (u.step === 0)
+    return (
+      <div className="flex-1 flex flex-col justify-center">
+        <p className="label mb-4 anim-rise">The unmasking</p>
+        <h1 className="display text-[clamp(3.5rem,8vw,9rem)] anim-rise delay-1">
+          Who were these men, <span className="italic text-acid">really?</span>
+        </h1>
+        <div className="flex gap-3 mt-12">
+          {u.cards.map((c, i) => (
+            <div key={c.token} className="flex-1 max-w-[14rem] anim-rise" style={{ animationDelay: `${300 + i * 120}ms` }}>
+              <Portrait photo={c.malePhoto} name={c.maleName} />
+              <p className="mt-2 font-serif text-xl">{c.maleName}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  if (u.step > u.total)
+    return (
+      <div className="flex-1 flex flex-col">
+        <p className="label mb-3 anim-rise">The full lineup</p>
+        <h1 className="display text-[clamp(2.4rem,4.6vw,5rem)] mb-8 anim-rise">
+          Questionable taste, <span className="italic">explained.</span>
+        </h1>
+        <div
+          className="grid gap-x-6 gap-y-6"
+          style={{
+            gridTemplateColumns: `repeat(${u.total <= 4 ? u.total : u.total <= 6 ? 3 : 5}, minmax(0, 1fr))`,
+            maxWidth: u.total <= 4 ? undefined : `calc(${u.total <= 6 ? 3 : 5} * ((100vh - 330px) / ${u.total <= 6 ? 2 : 2} - 70px) * 1.6)`,
+          }}
+        >
+          {u.cards.map((c, i) => (
+            <div key={c.token} className="anim-rise" style={{ animationDelay: `${i * 140}ms` }}>
+              <div className="grid grid-cols-2 gap-1.5">
+                <Portrait photo={c.malePhoto} name={c.maleName} />
+                <Portrait photo={c.femalePhoto} name={c.femaleName ?? "?"} />
+              </div>
+              <p className="mt-2 font-serif text-2xl">
+                {c.maleName} <span className="italic text-bone/45">is</span> <span className="text-acid">{c.femaleName}</span>
+              </p>
+              <p className="label">
+                {c.votes} vote{c.votes === 1 ? "" : "s"} · won {c.wins}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  const c = u.cards[u.step - 1];
+  return (
+    <div className="flex-1 grid lg:grid-cols-[1fr_1fr] gap-10 items-center" key={c.token}>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="anim-rise">
+          <Portrait photo={c.malePhoto} name={c.maleName} />
+          <p className="mt-3 display text-4xl">{c.maleName}</p>
+        </div>
+        <div className="anim-unveil">
+          <Portrait photo={c.femalePhoto} name={c.femaleName ?? "?"} />
+          <p className="mt-3 display text-4xl text-acid">{c.femaleName}</p>
+        </div>
+      </div>
+      <div>
+        <p className="label mb-4 anim-rise">
+          {u.step} of {u.total} · {c.votes} vote{c.votes === 1 ? "" : "s"} · topped {c.wins} question{c.wins === 1 ? "" : "s"}
+        </p>
+        <h1 className="display text-[clamp(3rem,6.5vw,7.5rem)] leading-[0.9]">
+          <span className="anim-rise block">{c.maleName}</span>
+          <span className="anim-unveil block italic text-bone/50 text-[0.6em]">is actually</span>
+          <span className="anim-unveil block text-acid" style={{ animationDelay: "1.9s" }}>
+            {c.femaleName}.
+          </span>
+        </h1>
+      </div>
+    </div>
+  );
+}
+
 function LeaderboardStage({ view }: { view: RoomView }) {
+  if (view.scoresHidden) {
+    const nextTitle = view.round && view.round.index + 1 < view.round.total ? view.roundTitles[view.round.index + 1]?.title : null;
+    return (
+      <div className="flex-1 flex flex-col justify-center">
+        <p className="label mb-4 anim-rise">Round {ROMAN[view.round?.index ?? 0]} complete</p>
+        <h1 className="display text-[clamp(3rem,7vw,7.5rem)] anim-rise delay-1">
+          The scores are <span className="italic text-acid">sealed.</span>
+        </h1>
+        <p className="font-serif italic text-3xl text-bone/55 mt-6 anim-rise delay-2">Everything is being counted. All will be revealed at the end.</p>
+        {view.fact && (
+          <blockquote className="mt-12 max-w-3xl anim-rise delay-4">
+            <p className="label mb-2">For the record</p>
+            <p className="font-serif text-2xl leading-snug">{view.fact}</p>
+          </blockquote>
+        )}
+        {nextTitle && <p className="mt-12 label anim-rise delay-5">Next: {nextTitle}</p>}
+      </div>
+    );
+  }
   const isLast = view.round && view.round.index + 1 >= view.round.total;
   return (
     <div className="flex-1 grid lg:grid-cols-[1.4fr_1fr] gap-16 items-center">
       <div>
         <p className="label mb-6">After round {ROMAN[view.round?.index ?? 0]}{isLast ? " · that was the last" : ""}</p>
-        <Standings teams={view.teams} large />
+        {view.teamsEnabled ? <Standings teams={view.teams} large /> : <Ranking players={view.players} large />}
       </div>
       <div>
         <p className="label mb-3">Individually</p>
@@ -452,7 +652,11 @@ function LeaderboardStage({ view }: { view: RoomView }) {
 }
 
 function FinalStage({ view, run }: { view: RoomView; run: (a: Record<string, unknown>) => void }) {
-  const sorted = [...view.teams].sort((a, b) => b.score - a.score);
+  const solo = !view.teamsEnabled;
+  const sortedTeams = [...view.teams].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  const sortedPlayers = [...view.players].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  const winner = solo ? sortedPlayers[0]?.name : sortedTeams[0]?.name;
+  const revealDelay = solo ? view.players.length * 650 : 600;
   const [i, setI] = useState(0);
   const items = view.messages;
   const photos = view.honoree.photos;
@@ -464,25 +668,29 @@ function FinalStage({ view, run }: { view: RoomView; run: (a: Record<string, unk
   const photo = photos.length ? photos[i % photos.length] : null;
 
   return (
-    <div className={`flex-1 relative grid gap-12 items-center ${photo || msg ? "lg:grid-cols-[1.2fr_1fr]" : ""}`}>
+    <div className="flex-1 relative grid gap-12 items-center lg:grid-cols-[1.2fr_1fr]">
       <div className="relative z-10">
-        <p className="label mb-4 anim-rise">{view.tie ? "Level on points" : `${sorted[0]?.name} win`}</p>
-        <h1 className="display text-[clamp(6rem,19vw,20rem)] glint anim-rise delay-1 leading-[0.85]">Forty.</h1>
-        <p className="font-serif italic text-[clamp(1.8rem,3.6vw,3.6rem)] mt-6 anim-rise delay-2">Happy birthday, {view.honoree.name}.</p>
-        {view.honoree.tagline && <p className="text-bone/50 mt-3 anim-rise delay-3">{view.honoree.tagline}</p>}
-        <div className="mt-12 max-w-xl anim-rise delay-4">
+        <TitleLockup className="anim-rise" size="clamp(2.8rem, 5vw, 5.4rem)" />
+        <p className="label mt-8 mb-4">The final scores</p>
+        <div className="max-w-2xl">{solo ? <Ranking players={view.players} large /> : <Standings teams={view.teams} large />}</div>
+      </div>
+      <div className="relative z-10 flex flex-col justify-center gap-10">
+        <div className="anim-rise" style={{ animationDelay: `${revealDelay}ms` }}>
           {view.tie ? (
             <button className="btn-acid text-lg px-8 py-5" onClick={() => run({ type: "tiebreak" })}>
-              Play the tie-breaker
+              Level on points. Play the tie-breaker
             </button>
           ) : (
-            <Standings teams={view.teams} />
+            <p className="display text-[clamp(2.4rem,4.6vw,5rem)]">
+              <span className="italic text-acid">{winner}</span> {solo ? "wins." : "win."}
+            </p>
           )}
+          <p className="font-serif italic text-[clamp(1.6rem,3vw,3rem)] mt-4 glint">Happy fortieth, {view.honoree.name}.</p>
+          {view.honoree.tagline && <p className="text-bone/50 mt-2">{view.honoree.tagline}</p>}
         </div>
-      </div>
-      {(photo || msg) && <div className="relative z-10 min-h-[40vh] flex flex-col justify-center">
+      {(photo || msg) && <div className="flex flex-col justify-center">
         {photo && (
-          <div key={`p${i}`} className="aspect-[4/5] max-h-[52vh] overflow-hidden anim-fade mb-8">
+          <div key={`p${i}`} className="aspect-[4/5] max-h-[40vh] overflow-hidden anim-fade mb-8">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={photo} alt="" className="w-full h-full object-cover anim-drift" />
           </div>
@@ -494,6 +702,7 @@ function FinalStage({ view, run }: { view: RoomView; run: (a: Record<string, unk
           </blockquote>
         )}
       </div>}
+      </div>
     </div>
   );
 }
@@ -504,9 +713,10 @@ function Dock({ view, run, hide }: { view: RoomView; run: (a: Record<string, unk
     lobby: "Start the game",
     round_intro: view.round?.qCount ? "Begin round" : "Next round",
     wager: "Lock wagers · show question",
-    question: "Reveal now",
-    reveal: "Next",
-    leaderboard: view.round && view.round.index + 1 < view.round.total ? "Next round" : "Final scores",
+    question: view.question?.kind === "men" ? "Close voting" : "Reveal now",
+    reveal: view.round && view.question && view.round.qIndex + 1 >= view.round.qCount && view.round.kind === "men" ? "Begin the unmasking" : "Next",
+    unmask: !view.unmask ? "Next" : view.unmask.step === 0 ? "Unmask the first" : view.unmask.step < view.unmask.total ? "Unmask the next" : view.unmask.step === view.unmask.total ? "Show them all" : "Continue",
+    leaderboard: view.round && view.round.index + 1 < view.round.total ? "Next round" : "Reveal the final scores",
     final: "",
   };
   const label = primary[view.phase];
@@ -584,8 +794,8 @@ function Dock({ view, run, hide }: { view: RoomView; run: (a: Record<string, unk
             Play again
           </button>
         ) : (
-          <button className="btn-acid" onClick={() => run({ type: view.phase === "lobby" ? "start" : "next" })}>
-            {label}
+          <button className={`btn-acid ${view.phase === "question" && view.allIn ? "ring-4 ring-acid/40 anim-pulse" : ""}`} onClick={() => run({ type: view.phase === "lobby" ? "start" : "next" })}>
+            {view.phase === "question" && view.allIn ? `Everyone’s in · ${label}` : label}
           </button>
         )}
       </div>

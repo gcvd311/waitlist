@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, LETTERS, ROMAN, store, teamColor } from "@/lib/client";
 import { buildRound, createRoomState, fillName } from "@/lib/engine";
-import { MuteButton, TeamDot, Wordmark } from "@/components/ui";
+import { MuteButton, Portrait, TeamDot, TitleLockup, Wordmark } from "@/components/ui";
 import { Standings } from "@/components/game";
 import { sfx } from "@/lib/sound";
 import type { Content, RoomQuestion, RoomRound } from "@/lib/types";
@@ -16,7 +16,8 @@ type Solo = {
   rounds: RoomRound[];
   r: number;
   q: number;
-  phase: "intro" | "wager" | "question" | "reveal" | "board" | "final";
+  phase: "intro" | "wager" | "question" | "reveal" | "unmask" | "board" | "final";
+  unmask?: number;
   scores: Record<string, number>;
   wagers: Record<string, number>;
   awarded: Record<string, number>; // teamId -> points given on this question
@@ -122,6 +123,12 @@ export default function SoloPage() {
         if (round.kind === "final40") return set({ q: s!.q + 1, phase: "wager", wagers: {}, awarded: {} });
         return setS({ ...s!, q: s!.q + 1, phase: "question", awarded: {}, endsAt: nq.timerSec ? Date.now() + nq.timerSec * 1000 : null, pausedLeft: null });
       }
+      if (round.kind === "men" && s!.content.players?.length) return set({ phase: "unmask", unmask: 0 });
+      return set({ phase: "board" });
+    }
+    if (s!.phase === "unmask") {
+      const n = s!.content.players.length;
+      if ((s!.unmask ?? 0) <= n) return set({ unmask: (s!.unmask ?? 0) + 1 });
       return set({ phase: "board" });
     }
     if (s!.phase === "board") return nextRound();
@@ -218,6 +225,16 @@ export default function SoloPage() {
             <h1 className={`display ${q.prompt.length > 90 ? "text-3xl" : "text-4xl"} ${q.kind === "whoSaid" ? "italic" : ""}`}>
               {q.kind === "whoSaid" ? `“${q.prompt}”` : q.prompt}
             </h1>
+            {q.kind === "men" && (
+              <div className={`mt-6 grid gap-2 ${q.options.length <= 3 ? "grid-cols-3" : "grid-cols-3"}`}>
+                {q.options.map((o, i) => (
+                  <div key={i}>
+                    <Portrait photo={q.optionPhotos?.[i]} name={o} />
+                    <p className="font-serif text-lg mt-1">{o}</p>
+                  </div>
+                ))}
+              </div>
+            )}
             {q.type === "mc" && q.kind !== "whoSaid" && (
               <ol className="mt-6 space-y-2">
                 {q.options.map((o, i) => (
@@ -233,7 +250,11 @@ export default function SoloPage() {
               <div className="mt-8 anim-rise">
                 <p className="label mb-2">Answer</p>
                 <p className="display text-4xl">
-                  {q.kind === "mostLikely"
+                  {q.kind === "men"
+                    ? q.type === "kfm"
+                      ? "Everyone, one at a time: kill, fuck, marry."
+                      : "Hands up on three."
+                    : q.kind === "mostLikely"
                     ? "Point on three."
                     : q.kind === "honoreeVs"
                       ? typeof q.answer === "number" ? q.options[q.answer] : "Ask her."
@@ -243,7 +264,7 @@ export default function SoloPage() {
                 </p>
                 {q.note && <p className="font-serif italic text-xl text-bone/55 mt-2">{q.note}</p>}
 
-                {q.kind !== "mostLikely" && (
+                {q.kind !== "mostLikely" && q.kind !== "men" && (
                   <div className="mt-8 space-y-3">
                     <p className="label">{round.kind === "final40" ? "Who was right?" : "Who gets it?"}</p>
                     {teams.map((t) => {
@@ -277,6 +298,48 @@ export default function SoloPage() {
           </div>
         )}
 
+        {s.phase === "unmask" && (() => {
+          const ps = s.content.players;
+          const k = s.unmask ?? 0;
+          const p = k >= 1 && k <= ps.length ? ps[k - 1] : null;
+          if (k === 0)
+            return (
+              <div className="flex-1 flex flex-col justify-center">
+                <p className="label mb-3">The unmasking</p>
+                <h1 className="display text-5xl">
+                  Who were these men, <span className="italic text-acid">really?</span>
+                </h1>
+              </div>
+            );
+          if (p)
+            return (
+              <div className="flex-1 flex flex-col justify-center gap-4" key={p.id}>
+                <div className="grid grid-cols-2 gap-3">
+                  <Portrait photo={p.malePhotos[0]} name={p.maleName} className="anim-rise" />
+                  <Portrait photo={p.photo} name={p.name} className="anim-unveil" />
+                </div>
+                <h1 className="display text-5xl">
+                  {p.maleName} <span className="italic text-bone/50">is</span> <span className="text-acid anim-unveil inline-block">{p.name}</span>
+                </h1>
+              </div>
+            );
+          return (
+            <div className="flex-1 grid grid-cols-2 gap-4 content-center">
+              {ps.map((x) => (
+                <div key={x.id}>
+                  <div className="grid grid-cols-2 gap-1">
+                    <Portrait photo={x.malePhotos[0]} name={x.maleName} />
+                    <Portrait photo={x.photo} name={x.name} />
+                  </div>
+                  <p className="text-sm mt-1">
+                    {x.maleName} <span className="text-bone/40">is</span> <span className="text-acid">{x.name}</span>
+                  </p>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
         {s.phase === "board" && (
           <div className="flex-1 flex flex-col justify-center gap-8">
             <p className="label">After round {ROMAN[s.r]}</p>
@@ -286,7 +349,7 @@ export default function SoloPage() {
 
         {s.phase === "final" && (
           <div className="flex-1 flex flex-col justify-center gap-8">
-            <h1 className="display text-8xl glint">Forty.</h1>
+            <TitleLockup size="clamp(3rem, 15vw, 5rem)" />
             <p className="font-serif italic text-3xl">Happy birthday, {name}.</p>
             <Standings teams={teams} />
             {s.content.messages.map((m) => (
@@ -301,7 +364,7 @@ export default function SoloPage() {
 
       {s.phase !== "final" && (
         <button className="btn-acid w-full py-5 mt-8 text-lg" onClick={next}>
-          {s.phase === "question" ? "Reveal" : s.phase === "wager" ? "Show the question" : s.phase === "board" ? "Next round" : "Next"}
+          {s.phase === "question" ? "Reveal" : s.phase === "wager" ? "Show the question" : s.phase === "board" ? "Next round" : s.phase === "unmask" ? "Unmask" : "Next"}
         </button>
       )}
     </main>

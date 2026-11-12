@@ -4,15 +4,17 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, hostKey, resizeImage, store } from "@/lib/client";
 import { Wordmark } from "@/components/ui";
+import { ImportBox, PlayersTab } from "@/components/AdminPlayers";
 import { DEFAULT_CONTENT } from "@/lib/defaultContent";
 import { uid } from "@/lib/engine";
 import type { Content, ContentQuestion, QType, RoundKind } from "@/lib/types";
 
-type Tab = "her" | "rounds" | "questions" | "friends" | "play";
-type QSet = "knowHer" | "honoreeVs" | "final40" | "trivia" | "tiebreakers";
+type Tab = "her" | "rounds" | "questions" | "friends" | "play" | "players";
+type QSet = "knowHer" | "past40" | "men" | "finale" | "honoreeVs" | "final40" | "trivia" | "tiebreakers";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "play", label: "Play" },
+  { id: "players", label: "Players & portraits" },
   { id: "her", label: "Her" },
   { id: "questions", label: "Questions" },
   { id: "friends", label: "Friends" },
@@ -154,6 +156,7 @@ function Dashboard() {
       </nav>
 
       {tab === "play" && <PlayTab content={content} setContent={setContent} saveState={saveState} />}
+      {tab === "players" && <PlayersTab content={content} update={update} />}
       {tab === "her" && <HerTab content={content} update={update} />}
       {tab === "questions" && <QuestionsTab content={content} update={update} />}
       {tab === "friends" && <FriendsTab content={content} update={update} />}
@@ -190,7 +193,13 @@ function PlayTab({ content, setContent, saveState }: { content: Content; setCont
 
   const her = content.honoreeAnswers ?? {};
   const placeholders = [...content.questions.knowHer, ...content.questions.final40].filter((q) => q.placeholder && her[q.id] === undefined).length;
-  const herTotal = content.questions.honoreeVs.length + content.questions.knowHer.length + content.questions.final40.filter((q) => q.aboutHer).length;
+  const herTotal =
+    content.questions.knowHer.filter((q) => !q.off && !q.optionsFrom).length + (content.questions.finale ?? []).filter((q) => q.askHer && !q.off).length;
+  const girls = content.players ?? [];
+  const roundsShort = content.rounds.filter((r) => r.enabled && r.kind !== "whoSaid" && r.kind !== "mostLikely").filter((r) => {
+    const list = (content.questions as unknown as Record<string, { off?: boolean; bonus?: boolean }[]>)[r.kind] ?? [];
+    return list.filter((q) => !q.off && !q.bonus).length < r.count;
+  });
   const herDone = Object.keys(her).length;
   const enabled = content.rounds.filter((r) => r.enabled);
 
@@ -235,8 +244,15 @@ function PlayTab({ content, setContent, saveState }: { content: Content; setCont
         <ul className="divide-y divide-bone/10 border-y border-bone/10">
           <Check ok={content.honoree.name !== DEFAULT_CONTENT.honoree.name} label="Her name" detail={content.honoree.name} />
           <Check ok={content.honoree.photos.length > 0} label="Photographs" detail={`${content.honoree.photos.length} uploaded`} />
+          <Check ok={girls.length >= 2 && girls.every((g) => g.photo)} label="Players’ portraits" detail={`${girls.filter((g) => g.photo).length} of ${girls.length} uploaded`} />
+          <Check
+            ok={girls.length >= 2 && girls.every((g) => g.malePhotos.length && g.maleName.trim())}
+            label="Men’s portraits and names"
+            detail={`${girls.filter((g) => g.malePhotos.length).length} of ${girls.length} have a portrait`}
+          />
+          <Check ok={!roundsShort.length} label="Questions switched on" detail={roundsShort.length ? `Short in: ${roundsShort.map((r) => r.title.replace("{name}", content.honoree.name)).join(", ")}` : "Every round has enough"} />
           <Check ok={!!content.honoreePassword} label="Her password" detail={content.honoreePassword ? "Set (see the Her tab)" : "Set one in the Her tab so she can log in"} />
-          <Check ok={herDone >= herTotal && herTotal > 0} label="Her answers" detail={`${herDone} of ${herTotal} answered by her`} />
+          <Check ok={herDone >= herTotal && herTotal > 0} label="Her answers" detail={`${Math.min(herDone, herTotal)} of ${herTotal} answered by her`} />
           <Check ok={placeholders === 0} label="Placeholder questions" detail={placeholders ? `${placeholders} still need her real answers` : "None left"} />
           <Check ok={content.confessions.length >= 5} label="Confessions for Who Said That?" detail={`${content.confessions.length} collected (players can add more in the lobby)`} />
           <Check ok={content.messages.length > 0} label="Messages for the final screen" detail={`${content.messages.length}`} />
@@ -431,13 +447,16 @@ function HerLogin({ content, update }: { content: Content; update: Update }) {
 
 // ───────────────────────── Questions ─────────────────────────
 
-const SETS: { id: QSet | "mostLikely"; label: string; hint: string }[] = [
-  { id: "knowHer", label: "How Well Do You Know Her?", hint: "She can give her real answers on her own page, or you can type them here. Free-text answers are auto-marked leniently; the host can overrule on the reveal. Add a photo to make it a picture question." },
-  { id: "honoreeVs", label: "Her vs. Everyone", hint: "She answers these on her own page before the party (or live on her phone if she hasn’t). Everyone else predicts." },
-  { id: "final40", label: "The Final 40", hint: "Teams wager before each. Mark questions about her life so she sits those out." },
-  { id: "mostLikely", label: "Most Likely To", hint: "Everyone votes for a player, anonymously." },
-  { id: "trivia", label: "General trivia", hint: "Every question here is editable. Each game picks a random set at the difficulty you choose." },
-  { id: "tiebreakers", label: "Tie-breakers", hint: "Numeric questions. Closest answer wins it for her team." },
+const SETS: { id: QSet | "mostLikely"; label: string; hint: string; extra?: boolean }[] = [
+  { id: "knowHer", label: "I · Crystal Clear?", hint: "Questions about {name}. She can give her real answers on her own page, or you type them here. Add a photo to make a picture question. Free text is auto-marked leniently and you can overrule it on the reveal." },
+  { id: "past40", label: "II · The Past 40 Years", hint: "1986 to 2026, played in this order. Switch on the ones you want; the rest wait in the bank. Edit any question or add your own." },
+  { id: "men", label: "III · The Men", hint: "Everyone votes for one man per question. The girl behind the most-voted man gets the points, secretly, until the unmasking. Portraits and names are on the Players & portraits page." },
+  { id: "finale", label: "IV · No Further Questions", hint: "A mix: Who Said That? slots (filled from the confessions), stories where the options are the girls, questions about {name}, and the final question." },
+  { id: "trivia", label: "General trivia", hint: "For the optional General Trivia round. Each game picks a random set at the difficulty you choose.", extra: true },
+  { id: "honoreeVs", label: "Her vs. Everyone", hint: "For the optional Her vs. Everyone round.", extra: true },
+  { id: "mostLikely", label: "Most Likely To", hint: "For the optional Most Likely To round.", extra: true },
+  { id: "final40", label: "The Wager", hint: "For the optional wager round (teams only).", extra: true },
+  { id: "tiebreakers", label: "Tie-breakers", hint: "Numeric. Closest answer wins. Played only if the final scores are level.", extra: true },
 ];
 
 function QuestionsTab({ content, update }: { content: Content; update: Update }) {
@@ -445,14 +464,17 @@ function QuestionsTab({ content, update }: { content: Content; update: Update })
   const meta = SETS.find((s) => s.id === set)!;
   return (
     <div>
-      <div className="flex flex-wrap gap-2 mb-8">
-        {SETS.map((s) => (
+      <div className="flex flex-wrap gap-2 mb-8 items-center">
+        {SETS.map((s, k) => (
+          <span key={s.id} className="contents">
+          {s.extra && !SETS[k - 1]?.extra && <span className="label w-full mt-2">Optional extras</span>}
           <button key={s.id} onClick={() => setSet(s.id)} className={`btn-sm border ${set === s.id ? "border-acid text-acid" : "border-bone/20 text-bone/60 hover:text-bone"}`}>
             {s.label}
             <span className="font-mono text-xs ml-2 opacity-60">
-              {s.id === "mostLikely" ? content.questions.mostLikely.length : content.questions[s.id as QSet].length}
+              {s.id === "mostLikely" ? content.questions.mostLikely.length : (content.questions[s.id as QSet] ?? []).filter((q) => !q.off).length}
             </span>
           </button>
+          </span>
         ))}
       </div>
       {set === "trivia" && (
@@ -475,7 +497,7 @@ function QuestionsTab({ content, update }: { content: Content; update: Update })
           ))}
         </div>
       )}
-      {set === "mostLikely" ? <MostLikelyEditor content={content} update={update} hint={meta.hint} /> : <QuestionList set={set} content={content} update={update} title={meta.label} hint={meta.hint} />}
+      {set === "mostLikely" ? <MostLikelyEditor content={content} update={update} hint={meta.hint} /> : <QuestionList set={set} content={content} update={update} title={meta.label.replace(/^[IV]+ · /, "")} hint={meta.hint.replace(/\{name\}/g, content.honoree.name)} />}
     </div>
   );
 }
@@ -508,13 +530,18 @@ function MostLikelyEditor({ content, update, hint }: { content: Content; update:
 
 function blankQuestion(set: QSet): ContentQuestion {
   if (set === "tiebreakers") return { id: uid(6), type: "number", prompt: "", answer: 0 };
+  if (set === "men") return { id: uid(6), type: "vote", prompt: "Who looks like he’d " };
+  if (set === "past40") return { id: uid(6), type: "mc", prompt: "", options: ["", "", "", ""], answer: 0, difficulty: "medium", year: 2000 };
   if (set === "honoreeVs") return { id: uid(6), type: "mc", prompt: "", options: ["", "", "", ""] };
   return { id: uid(6), type: set === "knowHer" ? "text" : "mc", prompt: "", options: ["", "", "", ""], answer: set === "knowHer" ? "" : 0 };
 }
 
 function QuestionList({ set, content, update, title, hint }: { set: QSet; content: Content; update: Update; title: string; hint: string }) {
-  const list = content.questions[set];
+  const list = content.questions[set] ?? [];
   const [open, setOpen] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const round = content.rounds.find((r) => r.kind === (set === "tiebreakers" ? "" : set));
+  const inGame = list.filter((q) => !q.off && !q.bonus).length;
   const [filter, setFilter] = useState("");
   const her = content.honoreeAnswers ?? {};
   const visible = (q: ContentQuestion) =>
@@ -524,37 +551,74 @@ function QuestionList({ set, content, update, title, hint }: { set: QSet; conten
       title={title}
       hint={hint}
       action={
-        <button
-          className="btn-ghost btn-sm"
-          onClick={() => {
-            const q = blankQuestion(set);
-            update((c) => void c.questions[set].push(q));
-            setOpen(q.id);
-          }}
-        >
-          Add question
-        </button>
+        <div className="flex gap-2">
+          <button className="btn-ghost btn-sm" onClick={() => setImporting(!importing)}>
+            Import
+          </button>
+          <button
+            className="btn-ghost btn-sm"
+            onClick={() => {
+              const q = blankQuestion(set);
+              update((c) => void (c.questions[set] = [...(c.questions[set] ?? []), q]));
+              setOpen(q.id);
+            }}
+          >
+            Add question
+          </button>
+        </div>
       }
     >
+      {round && (
+        <p className={`text-sm mb-4 ${inGame < round.count ? "text-rouge" : "text-bone/55"}`}>
+          {inGame} switched on for the game · the round plays {round.count}
+          {inGame > round.count ? ` (the first ${round.count} in this order)` : ""}
+          {list.some((q) => q.bonus && !q.off) ? ` · plus ${list.filter((q) => q.bonus && !q.off).length} bonus` : ""}
+          {list.some((q) => q.off) ? ` · ${list.filter((q) => q.off).length} in the bank` : ""}
+        </p>
+      )}
+      {importing && (
+        <ImportBox
+          set={set}
+          onImport={(qs) => {
+            update((c) => void (c.questions[set] = [...(c.questions[set] ?? []), ...qs]));
+            setImporting(false);
+          }}
+        />
+      )}
       {list.length > 15 && (
         <input className="box mb-4" placeholder="Search questions, categories or “hard”…" value={filter} onChange={(e) => setFilter(e.target.value)} />
       )}
       <ol className="border-t border-bone/10">
         {list.map((q, i) => !visible(q) ? null : (
-          <li key={q.id} className="border-b border-bone/10">
-            <button className="w-full text-left flex items-baseline gap-4 py-3" onClick={() => setOpen(open === q.id ? null : q.id)}>
+          <li key={q.id} className={`border-b border-bone/10 ${q.off ? "opacity-50" : ""}`}>
+            <div className="flex items-baseline gap-3">
+            <button
+              title={q.off ? "In the bank. Click to play it." : "Playing. Click to move it to the bank."}
+              className={`shrink-0 font-mono text-[10px] tracking-label px-1.5 py-0.5 border ${q.off ? "border-bone/20 text-bone/40" : "border-acid text-acid"}`}
+              onClick={() => update((c) => void (c.questions[set][i].off = !q.off))}
+            >
+              {q.off ? "BANK" : q.bonus ? "BONUS" : "ON"}
+            </button>
+            <button className="flex-1 text-left flex items-baseline gap-4 py-3" onClick={() => setOpen(open === q.id ? null : q.id)}>
               <span className="font-mono text-xs text-bone/40 w-6">{i + 1}</span>
-              <span className="flex-1 font-serif text-xl leading-snug">{q.prompt.replace(/\{name\}/g, content.honoree.name) || <em className="text-bone/30">Untitled</em>}</span>
+              {q.year && <span className="font-mono text-xs text-bone/50">{q.year}</span>}
+              <span className="flex-1 font-serif text-xl leading-snug">
+                {q.fromPool ? <em className="text-bone/60">A confession, picked at random on the night</em> : q.prompt.replace(/\{name\}/g, content.honoree.name) || <em className="text-bone/30">Untitled</em>}
+              </span>
               {her[q.id] !== undefined ? <span className="label text-acid">She answered</span> : q.placeholder && <span className="label text-rouge">Placeholder</span>}
               {q.difficulty && <span className="label">{q.difficulty}</span>}
               {q.aboutHer && <span className="label">About her</span>}
-              <span className="label">{q.type === "mc" ? "Choice" : q.type === "text" ? "Free text" : "Number"}</span>
+              <span className="label">
+                {q.fromPool ? "Who said that" : q.optionsFrom ? "The girls" : q.type === "mc" ? "Choice" : q.type === "text" ? "Free text" : q.type === "vote" ? "Vote" : q.type === "kfm" ? "K / F / M" : "Number"}
+              </span>
             </button>
+            </div>
             {open === q.id && (
               <QuestionEditor
                 set={set}
                 q={q}
                 name={content.honoree.name}
+                girls={content.players.map((p) => p.name)}
                 onChange={(fn) => update((c) => fn(c.questions[set][i]))}
                 herAnswer={her[q.id]}
                 onClearHer={() => update((c) => void delete c.honoreeAnswers[q.id])}
@@ -586,7 +650,9 @@ function QuestionEditor({
   onMove,
   herAnswer,
   onClearHer,
+  girls = [],
 }: {
+  girls?: string[];
   set: QSet;
   q: ContentQuestion;
   name: string;
@@ -597,7 +663,17 @@ function QuestionEditor({
   onClearHer?: () => void;
 }) {
   const [peek, setPeek] = useState(false);
-  const types: QType[] = set === "tiebreakers" ? ["number"] : set === "honoreeVs" || set === "trivia" ? ["mc"] : ["mc", "text"];
+  const types: QType[] =
+    set === "tiebreakers"
+      ? ["number"]
+      : set === "men"
+        ? ["vote", "kfm"]
+        : set === "finale"
+          ? ["mc", "text", "number"]
+          : set === "honoreeVs" || set === "trivia" || set === "past40"
+            ? ["mc"]
+            : ["mc", "text"];
+  const TYPE_LABEL: Record<string, string> = { mc: "Multiple choice", text: "Free text", number: "Closest number", vote: "Vote for one", kfm: "Kill / F / Marry" };
   const ch = (fn: (q: ContentQuestion) => void) =>
     onChange((x) => {
       fn(x);
@@ -617,19 +693,75 @@ function QuestionEditor({
                   if (t === "mc") {
                     x.options = x.options?.length ? x.options : ["", "", "", ""];
                     x.answer = typeof x.answer === "number" ? x.answer : 0;
-                  } else x.answer = typeof x.answer === "string" ? x.answer : "";
+                  } else if (t === "number") x.answer = typeof x.answer === "number" ? x.answer : 0;
+                  else if (t === "text") x.answer = typeof x.answer === "string" ? x.answer : "";
+                  else delete x.answer;
                 })
               }
             >
-              {t === "mc" ? "Multiple choice" : "Free text"}
+              {TYPE_LABEL[t]}
             </button>
           ))}
         </div>
       )}
+      <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+        <label className="flex items-center gap-2">
+          <input type="checkbox" className="accent-acid" checked={!q.off} onChange={(e) => onChange((x) => void (x.off = !e.target.checked))} />
+          Play it in the game
+        </label>
+        {set !== "tiebreakers" && (
+          <label className="flex items-center gap-2">
+            <input type="checkbox" className="accent-acid" checked={!!q.bonus} onChange={(e) => onChange((x) => void (x.bonus = e.target.checked || undefined))} />
+            Bonus question (after the main ones)
+          </label>
+        )}
+        {set === "finale" && (
+          <>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" className="accent-acid" checked={!!q.fromPool} onChange={(e) => ch((x) => void (x.fromPool = e.target.checked || undefined, e.target.checked && ((x.optionsFrom = "players"), (x.type = "mc"))))} />
+              Who Said That? slot (a random confession)
+            </label>
+            {!q.fromPool && q.type === "mc" && (
+              <label className="flex items-center gap-2">
+                <input type="checkbox" className="accent-acid" checked={q.optionsFrom === "players"} onChange={(e) => ch((x) => void (x.optionsFrom = e.target.checked ? "players" : undefined, (x.answer = e.target.checked ? "" : 0)))} />
+                The options are the girls
+              </label>
+            )}
+            {!q.fromPool && (
+              <label className="flex items-center gap-2">
+                <input type="checkbox" className="accent-acid" checked={!!q.askHer} onChange={(e) => ch((x) => void (x.askHer = e.target.checked || undefined))} />
+                {name} answers it on her page
+              </label>
+            )}
+          </>
+        )}
+      </div>
+
+      {q.fromPool ? (
+        <p className="text-bone/55 text-sm">
+          On the night this slot shows one confession, chosen at random from the ones your friends sent in (Friends tab) or typed in the lobby. Everyone guesses who wrote it.
+        </p>
+      ) : (
       <div>
         <label className="label block mb-1">Question · use {"{name}"} for {name}</label>
         <textarea className="box min-h-[64px] font-serif text-xl" value={q.prompt} onChange={(e) => ch((x) => void (x.prompt = e.target.value))} />
       </div>
+      )}
+
+      {q.optionsFrom === "players" && !q.fromPool && (
+        <div>
+          <label className="label block mb-1">The right answer</label>
+          <select className="box max-w-xs" value={String(q.answer ?? "")} onChange={(e) => ch((x) => void (x.answer = e.target.value))}>
+            <option value="">Choose…</option>
+            {girls.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
+          </select>
+          <p className="text-bone/45 text-xs mt-1">The options are everyone’s names, set on the Players & portraits page.</p>
+        </div>
+      )}
 
       {herAnswer !== undefined && (
         <div className="border border-acid/40 px-4 py-3 text-sm flex flex-wrap items-center gap-3">
@@ -648,7 +780,7 @@ function QuestionEditor({
         </div>
       )}
 
-      {q.type === "mc" && (
+      {q.type === "mc" && !q.optionsFrom && (
         <div>
           <label className="label block mb-2">{set === "honoreeVs" ? "Options · tick a fallback answer only if she isn’t playing" : "Options · tick the right one"}</label>
           <div className="space-y-2">
@@ -703,17 +835,41 @@ function QuestionEditor({
       )}
 
       {q.type === "number" && (
-        <div>
-          <label className="label block mb-1">Correct number</label>
-          <input type="number" className="box w-40" value={Number(q.answer ?? 0)} onChange={(e) => ch((x) => void (x.answer = Number(e.target.value)))} />
+        <div className="flex gap-4 flex-wrap">
+          <div>
+            <label className="label block mb-1">Correct number</label>
+            <input type="number" className="box w-40" value={Number(q.answer ?? 0)} onChange={(e) => ch((x) => void (x.answer = Number(e.target.value)))} />
+          </div>
+          {set === "finale" && (
+            <div>
+              <label className="label block mb-1">Points for the closest</label>
+              <input type="number" className="box w-40" value={q.points ?? 100} onChange={(e) => ch((x) => void (x.points = Number(e.target.value)))} />
+            </div>
+          )}
         </div>
       )}
 
-      <div className="grid sm:grid-cols-2 gap-4">
+      {set !== "men" && <div className="grid sm:grid-cols-2 gap-4">
         <div>
           <label className="label block mb-1">Line shown on the reveal (optional)</label>
           <input className="box" value={q.note ?? ""} onChange={(e) => ch((x) => void (x.note = e.target.value || undefined))} />
         </div>
+        {set === "past40" && (
+          <div className="flex gap-3">
+            <div>
+              <label className="label block mb-1">Year</label>
+              <input type="number" className="box w-28" value={q.year ?? ""} onChange={(e) => ch((x) => void (x.year = Number(e.target.value) || undefined))} />
+            </div>
+            <div>
+              <label className="label block mb-1">Difficulty</label>
+              <select className="box" value={q.difficulty ?? "medium"} onChange={(e) => ch((x) => void (x.difficulty = e.target.value as ContentQuestion["difficulty"]))}>
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+              </select>
+            </div>
+          </div>
+        )}
         {set === "trivia" && (
           <div className="flex gap-3">
             <div className="flex-1">
@@ -742,9 +898,9 @@ function QuestionEditor({
             </label>
           </div>
         )}
-      </div>
+      </div>}
 
-      {(set === "knowHer" || set === "final40" || set === "trivia") && (
+      {(set === "knowHer" || set === "final40" || set === "trivia" || set === "past40" || (set === "finale" && !q.fromPool)) && (
         <div>
           <label className="label block mb-2">Picture (optional)</label>
           <div className="flex items-center gap-3">
@@ -865,6 +1021,9 @@ function FriendsTab({ content, update }: { content: Content; update: Update }) {
 
 const KIND_LABEL: Record<RoundKind, string> = {
   knowHer: "Her trivia",
+  past40: "Four decades, in order",
+  men: "Men’s lineup vote",
+  finale: "Confessions, stories and the last question",
   trivia: "General trivia",
   whoSaid: "Confessions",
   mostLikely: "Anonymous vote",
@@ -875,7 +1034,10 @@ const KIND_LABEL: Record<RoundKind, string> = {
 function RoundsTab({ content, update }: { content: Content; update: Update }) {
   return (
     <div>
-      <Section title="Rounds" hint="Turn rounds on or off, reorder them, and set counts, timers and points. Timer 0 means the host reveals manually.">
+      <Section
+        title="Rounds"
+        hint={`The default game is four rounds of ten: ${content.rounds.filter((r) => r.enabled).reduce((n, r) => n + r.count, 0)} questions with the current settings, plus any bonus questions. Optional rounds sit below, switched off. Timer 0 means no clock: the host closes each question.`}
+      >
         <div className="space-y-4">
           {content.rounds.map((r, i) => (
             <div key={r.kind} className={`border border-bone/15 p-4 ${r.enabled ? "" : "opacity-50"}`}>
@@ -897,14 +1059,68 @@ function RoundsTab({ content, update }: { content: Content; update: Update }) {
               <div className="grid grid-cols-3 gap-3 mt-3">
                 <Num label="Questions" value={r.count} onChange={(v) => update((c) => void (c.rounds[i].count = v))} />
                 <Num label="Timer (sec)" value={r.timerSec} onChange={(v) => update((c) => void (c.rounds[i].timerSec = v))} />
-                <Num label={r.kind === "final40" ? "Points (wagers decide)" : r.kind === "mostLikely" ? "Points for siding with the room" : "Points per right answer"} value={r.points} onChange={(v) => update((c) => void (c.rounds[i].points = v))} />
+                {r.kind === "men" ? (
+                  <p className="text-xs text-bone/50 self-end pb-2">Points for this round are set under Scoring below.</p>
+                ) : (
+                  <Num label={r.kind === "final40" ? "Points (wagers decide)" : r.kind === "mostLikely" ? "Points for siding with the room" : "Points per right answer"} value={r.points} onChange={(v) => update((c) => void (c.rounds[i].points = v))} />
+                )}
               </div>
+              <label className="flex items-center gap-2 text-sm mt-3">
+                <input type="checkbox" className="accent-acid" checked={!!r.includeBonus} onChange={(e) => update((c) => void (c.rounds[i].includeBonus = e.target.checked))} />
+                Play this round’s bonus questions after the main {r.count}
+              </label>
             </div>
           ))}
         </div>
       </Section>
 
-      <Section title="Scoring">
+      <Section title="How the game is scored">
+        <div className="space-y-3 mb-8">
+          <Toggle
+            on={content.scoring.hideScoresUntilEnd}
+            set={(v) => update((c) => void (c.scoring.hideScoresUntilEnd = v))}
+            label="Keep scores sealed until the final reveal"
+            hint="Answers are revealed after every question, but nobody sees points or standings until the end."
+          />
+          <Toggle
+            on={content.scoring.autoReveal}
+            set={(v) => update((c) => void (c.scoring.autoReveal = v))}
+            label="Reveal automatically once everyone has answered"
+            hint="Off: the host taps to reveal each answer. Men’s voting always waits for the host."
+          />
+          <Toggle
+            on={content.teamsEnabled}
+            set={(v) => update((c) => void (c.teamsEnabled = v))}
+            label="Play in teams"
+            hint="Off: everyone plays for herself (best for six). On: two teams, named below."
+          />
+        </div>
+
+        <p className="label mb-2">Round III · The Men of Questionable Taste</p>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {(
+            [
+              ["The girl behind the winner scores", 100, 0],
+              ["Everyone who votes scores", 0, 25],
+              ["Both", 100, 25],
+              ["Just for fun", 0, 0],
+            ] as const
+          ).map(([label, w, part]) => (
+            <button
+              key={label}
+              onClick={() => update((c) => void ((c.scoring.menWinner = w), (c.scoring.menParticipation = part)))}
+              className={`btn-sm border ${content.scoring.menWinner === w && content.scoring.menParticipation === part ? "border-acid text-acid" : "border-bone/20 text-bone/60 hover:text-bone"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="grid sm:grid-cols-3 gap-4 mb-8">
+          <Num label="Points for the girl behind the most-voted man" value={content.scoring.menWinner} onChange={(v) => update((c) => void (c.scoring.menWinner = v))} />
+          <Num label="Participation points per vote" value={content.scoring.menParticipation} onChange={(v) => update((c) => void (c.scoring.menParticipation = v))} />
+        </div>
+
+        <p className="label mb-2">Other rounds</p>
         <div className="grid sm:grid-cols-3 gap-4">
           <Num label="Trivia speed bonus (max)" value={content.scoring.speedBonus} onChange={(v) => update((c) => void (c.scoring.speedBonus = v))} />
           <Num label="Surprise multiplier (Her vs. Everyone)" value={content.scoring.surpriseMultiplier} onChange={(v) => update((c) => void (c.scoring.surpriseMultiplier = v))} />
@@ -915,14 +1131,26 @@ function RoundsTab({ content, update }: { content: Content; update: Update }) {
         </p>
       </Section>
 
-      <Section title="Teams">
+      {content.teamsEnabled && <Section title="Teams">
         <div className="grid sm:grid-cols-2 gap-4">
           {content.teams.map((t, i) => (
             <input key={t.id} className="field font-serif text-3xl" value={t.name} onChange={(e) => update((c) => void (c.teams[i].name = e.target.value))} />
           ))}
         </div>
-      </Section>
+      </Section>}
     </div>
+  );
+}
+
+function Toggle({ on, set, label, hint }: { on: boolean; set: (v: boolean) => void; label: string; hint: string }) {
+  return (
+    <label className="flex items-start gap-3 cursor-pointer">
+      <input type="checkbox" className="accent-acid w-4 h-4 mt-1" checked={!!on} onChange={(e) => set(e.target.checked)} />
+      <span>
+        {label}
+        <span className="block text-bone/45 text-sm">{hint}</span>
+      </span>
+    </label>
   );
 }
 

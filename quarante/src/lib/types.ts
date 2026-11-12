@@ -1,7 +1,7 @@
 // ───────────────────────── Content (edited in /admin, stored as JSON) ─────────────────────────
 
-export type RoundKind = "knowHer" | "trivia" | "whoSaid" | "mostLikely" | "honoreeVs" | "final40";
-export type QType = "mc" | "text" | "number";
+export type RoundKind = "knowHer" | "past40" | "men" | "finale" | "trivia" | "whoSaid" | "mostLikely" | "honoreeVs" | "final40";
+export type QType = "mc" | "text" | "number" | "vote" | "kfm";
 export type Difficulty = "easy" | "medium" | "hard";
 
 export interface ContentQuestion {
@@ -17,6 +17,23 @@ export interface ContentQuestion {
   category?: string;
   aboutHer?: boolean; // final40: the birthday girl sits this one out
   placeholder?: boolean; // marks content that still needs real info
+  off?: boolean; // kept in the bank, not played
+  bonus?: boolean; // played after the main questions when the round includes bonuses
+  year?: number; // The Past 40 Years: shown as the question's label
+  optionsFrom?: "players"; // options are the girls' names, filled in at game time
+  fromPool?: boolean; // a Who Said That? slot, filled from the confessions
+  askHer?: boolean; // she can answer it in advance on her page
+  points?: number; // overrides the round's points
+}
+
+/** One of the girls, and the man she becomes in Round 3. */
+export interface Profile {
+  id: string;
+  name: string;
+  photo: string;
+  maleName: string;
+  malePhotos: string[]; // rotated across the men's questions
+  honoree?: boolean;
 }
 
 export interface RoundConfig {
@@ -27,16 +44,32 @@ export interface RoundConfig {
   count: number; // questions per game
   timerSec: number; // 0 = no timer
   points: number; // base points for a correct answer
+  includeBonus?: boolean;
 }
 
 export interface Content {
+  schemaVersion?: number;
+  players: Profile[];
+  teamsEnabled: boolean;
   honoree: { name: string; tagline: string; photos: string[]; facts: { id: string; text: string }[] };
   guests: string[];
   teams: { id: string; name: string }[];
   rounds: RoundConfig[];
-  scoring: { speedBonus: number; surpriseMultiplier: number; mostLikelyConsensus: number; wagerFloor: number };
+  scoring: {
+    speedBonus: number;
+    surpriseMultiplier: number;
+    mostLikelyConsensus: number;
+    wagerFloor: number;
+    menWinner: number; // the girl behind the most-voted man gets these
+    menParticipation: number; // every voter gets these
+    hideScoresUntilEnd: boolean;
+    autoReveal: boolean; // reveal as soon as everyone has answered (otherwise the host taps)
+  };
   questions: {
     knowHer: ContentQuestion[];
+    past40: ContentQuestion[];
+    men: ContentQuestion[];
+    finale: ContentQuestion[];
     honoreeVs: ContentQuestion[];
     final40: ContentQuestion[];
     trivia: ContentQuestion[]; // custom trivia, added to the built-in bank
@@ -63,6 +96,7 @@ export interface Player {
   isHonoree: boolean;
   joinedAt: number;
   photo?: string;
+  profileId?: string;
 }
 
 export interface RoomQuestion {
@@ -71,7 +105,9 @@ export interface RoomQuestion {
   type: QType | "vote";
   prompt: string;
   options: string[];
-  optionIds?: string[]; // vote: player ids
+  optionIds?: string[]; // vote: player ids, or secret character tokens in Round 3
+  optionPhotos?: string[];
+  bonus?: boolean;
   answer?: string | number;
   accept?: string[];
   image?: string;
@@ -91,10 +127,19 @@ export interface RoomRound {
   count: number;
   timerSec: number;
   points: number;
+  includeBonus?: boolean;
   questions: RoomQuestion[]; // built when the round starts
 }
 
-export type Phase = "lobby" | "round_intro" | "wager" | "question" | "reveal" | "leaderboard" | "final";
+export type Phase = "lobby" | "round_intro" | "wager" | "question" | "reveal" | "unmask" | "leaderboard" | "final";
+
+/** A man in Round 3. The token is random per round; who he really is never leaves the server until the unmasking. */
+export interface CastMember {
+  token: string;
+  profileId: string;
+  maleName: string;
+  photos: string[];
+}
 
 export interface Answer {
   value: string | number;
@@ -126,6 +171,11 @@ export interface RoomState {
   skipped: string[];
   tiebreakCount: number;
   finishedAt: number | null;
+  cast: CastMember[];
+  hiddenKeys: string[]; // Round 3 points stay out of every score until the unmasking
+  menRevealed: boolean;
+  unmaskStep: number;
+  unmaskOrder: string[]; // tokens, fewest votes first
 }
 
 // ───────────────────────── What clients receive ─────────────────────────
@@ -136,14 +186,15 @@ export interface PublicPlayer {
   team: string;
   isHonoree: boolean;
   online: boolean;
-  score: number;
+  score: number | null; // null while scores are sealed
   photo?: string;
+  profileId?: string;
 }
 
 export interface PublicTeam {
   id: string;
   name: string;
-  score: number;
+  score: number | null;
   wager: number | null;
   maxWager: number;
 }
@@ -158,6 +209,18 @@ export interface RevealData {
   note?: string;
   surprise?: boolean;
   voteWinners?: string[];
+  kfm?: { label: string; photo?: string; k: number; f: number; m: number }[];
+}
+
+export interface UnmaskCard {
+  token: string;
+  maleName: string;
+  malePhoto?: string;
+  votes: number;
+  wins: number;
+  revealed: boolean;
+  femaleName?: string;
+  femalePhoto?: string;
 }
 
 export interface RoomView {
@@ -193,10 +256,15 @@ export interface RoomView {
   tie: boolean;
   isTiebreak: boolean;
   fact: string | null;
+  profiles: { id: string; name: string; photo: string; playerId: string | null; online: boolean; honoree: boolean }[];
+  teamsEnabled: boolean;
+  scoresHidden: boolean;
+  unmask: { step: number; total: number; cards: UnmaskCard[] } | null;
   // host-only extras
   hostAnswers?: Record<string, string | number>;
   honoreeAnswered?: boolean;
   placeholderWarning?: boolean;
+  allIn?: boolean;
 }
 
 export type HostAction =
@@ -215,6 +283,7 @@ export type HostAction =
   | { type: "shuffleTeams" }
   | { type: "setHonoree"; playerId: string | null }
   | { type: "kick"; playerId: string }
+  | { type: "release"; playerId: string }
   | { type: "tiebreak" }
   | { type: "backToLobby" };
 
@@ -222,4 +291,5 @@ export type PlayerAction =
   | { type: "answer"; key: string; value: string | number }
   | { type: "wager"; key: string; amount: number }
   | { type: "confess"; text: string }
-  | { type: "photo"; photo: string };
+  | { type: "photo"; photo: string }
+  | { type: "claim"; profileId: string };
