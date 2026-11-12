@@ -1,3 +1,4 @@
+import { ENCORE_DEFAULT } from "./engine";
 import { PAST40_BANK } from "./past40Bank";
 import { TRIVIA_BANK } from "./triviaBank";
 import type { Content, ContentQuestion } from "./types";
@@ -165,5 +166,6 @@ export const DEFAULT_CONTENT: Content = {
   },
   confessions: [],
   messages: [],
+  encore: { ...ENCORE_DEFAULT },
   updatedAt: 0,
 };

@@ -591,6 +591,14 @@ function Reveal({ view }: { view: RoomView }) {
 }
 
 function Final({ view }: { view: RoomView }) {
+  if (view.slideshow)
+    return (
+      <div className="flex-1 flex flex-col justify-center items-center text-center gap-6 anim-fade">
+        <Sticker name="double-hearts" className="w-20" />
+        <p className="font-serif italic font-bold text-4xl">Eyes on the big screen.</p>
+        <p className="text-bone/60">Messages for {view.honoree.name}.</p>
+      </div>
+    );
   if (view.teamsEnabled) {
     const sorted = [...view.teams].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
     const winner = sorted[0];

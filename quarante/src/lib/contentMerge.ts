@@ -19,6 +19,7 @@ export function mergeContent(raw: Partial<Content> | null | undefined): Content 
     teams: raw.teams?.length ? raw.teams : d.teams,
     players: raw.players ?? d.players,
     honoreeAnswers: raw.honoreeAnswers ?? {},
+    encore: { ...d.encore!, ...(raw.encore ?? {}) },
   };
   // Older saves kept the starter trivia outside the content; fold it in so every question is editable.
   if (!raw.triviaSeeded) {

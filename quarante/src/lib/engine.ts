@@ -5,6 +5,7 @@ import type {
   UnmaskCard,
   Content,
   ContentQuestion,
+  Encore,
   HostAction,
   Player,
   PlayerAction,
@@ -16,6 +17,17 @@ import type {
   RoomState,
   RoomView,
 } from "./types";
+
+export const ENCORE_DEFAULT: Encore = {
+  extraRound: true,
+  extraKind: "trivia",
+  extraTitle: "One More Round",
+  extraCount: 5,
+  tiebreaker: true,
+  slideshow: true,
+  slideSeconds: 8,
+  image: "",
+};
 
 export class GameError extends Error {
   status: number;
@@ -250,15 +262,25 @@ export function buildRound(state: RoomState, index: number): RoomQuestion[] {
 
   const her = c.honoreeAnswers ?? {};
   const names = girlNames(state);
+  // An encore round skips anything already asked tonight and draws on the whole bank, switched off or not.
+  const played = new Set(
+    state.rounds.filter((_, i) => i !== index).flatMap((r) => r.questions.map((q) => q.prompt.trim().toLowerCase())),
+  );
+  const fresh = (prompt: string) => !played.has(fillName(prompt, name).trim().toLowerCase());
+  const pickFor = (list: ContentQuestion[]) => {
+    if (!round.extra) return pick(list, round);
+    const all = list.filter((q) => usable(q) && fresh(q.prompt));
+    return [...all.filter((q) => !q.off), ...all.filter((q) => q.off)].slice(0, round.count);
+  };
   switch (round.kind) {
     case "knowHer":
-      return pick(c.questions.knowHer, round).map((q, j) => toRoomQ(q, round, key(j), name, false, her, names));
+      return pickFor(c.questions.knowHer).map((q, j) => toRoomQ(q, round, key(j), name, false, her, names));
     case "past40":
-      return pick(c.questions.past40 ?? [], round).map((q, j) => toRoomQ(q, round, key(j), name, true, her, names));
+      return pickFor(c.questions.past40 ?? []).map((q, j) => toRoomQ(q, round, key(j), name, true, her, names));
     case "finale": {
-      const pool = shuffle([...c.confessions, ...state.confessions].filter((x) => x.text.trim() && x.author.trim()));
+      const pool = shuffle([...c.confessions, ...state.confessions].filter((x) => x.text.trim() && x.author.trim() && (!round.extra || fresh(x.text))));
       const out: RoomQuestion[] = [];
-      for (const q of pick(c.questions.finale ?? [], round)) {
+      for (const q of pickFor(c.questions.finale ?? [])) {
         if (q.fromPool) {
           const conf = pool.shift();
           if (!conf) continue; // no confessions left: the slot quietly drops out
@@ -275,7 +297,8 @@ export function buildRound(state: RoomState, index: number): RoomQuestion[] {
     case "men": {
       state.cast = buildCast(state);
       if (state.cast.length < 2) return [];
-      return pick(c.questions.men ?? [], round).map((q, j) => {
+      const menQs = pickFor(c.questions.men ?? []);
+      return (menQs.length ? menQs : pick(c.questions.men ?? [], { ...round, extra: false })).map((q, j) => {
         const lineup = shuffle(state.cast); // one fresh order per question, the same on every phone
         const chosen = lineup; // Kill / F / Marry uses the whole lineup too
         // Which of her three men: the question's choice, or rotate 1, 2, 3, 1…
@@ -297,11 +320,11 @@ export function buildRound(state: RoomState, index: number): RoomQuestion[] {
       });
     }
     case "honoreeVs":
-      return pick(c.questions.honoreeVs, round).map((q, j) => toRoomQ(q, round, key(j), name, false, her, names));
+      return pickFor(c.questions.honoreeVs).map((q, j) => toRoomQ(q, round, key(j), name, false, her, names));
     case "final40":
-      return pick(c.questions.final40, round).map((q, j) => toRoomQ(q, round, key(j), name, true, her, names));
+      return pickFor(c.questions.final40).map((q, j) => toRoomQ(q, round, key(j), name, true, her, names));
     case "trivia": {
-      const all = c.questions.trivia.filter((q) => usable(q) && !q.off);
+      const all = c.questions.trivia.filter((q) => usable(q) && !q.off && fresh(q.prompt));
       const level = c.triviaLevel ?? "mixed";
       const ok = (q: ContentQuestion) =>
         level === "hardest" ? q.difficulty === "hard" : level === "harder" ? q.difficulty !== "easy" : true;
@@ -312,7 +335,7 @@ export function buildRound(state: RoomState, index: number): RoomQuestion[] {
       return picked.map((q, j) => toRoomQ(q, round, key(j), name, true));
     }
     case "whoSaid": {
-      const pool = shuffle([...c.confessions, ...state.confessions].filter((x) => x.text.trim() && x.author.trim()));
+      const pool = shuffle([...c.confessions, ...state.confessions].filter((x) => x.text.trim() && x.author.trim() && fresh(x.text)));
       const names: string[] = [];
       const add = (n: string) => {
         const t = n.trim();
@@ -333,7 +356,7 @@ export function buildRound(state: RoomState, index: number): RoomQuestion[] {
       }));
     }
     case "mostLikely":
-      return shuffle(c.questions.mostLikely.filter((p) => p.prompt.trim()))
+      return shuffle(c.questions.mostLikely.filter((p) => p.prompt.trim() && fresh(p.prompt)))
         .slice(0, round.count)
         .map((p, j) => ({
           key: key(j),
@@ -940,6 +963,7 @@ export function applyHostAction(state: RoomState, action: HostAction, now: numbe
       return;
     case "tiebreak": {
       if (state.phase !== "final") throw new GameError("Tie-breakers happen at the end.");
+      state.slideshow = false;
       const pool = state.content.questions.tiebreakers.filter((q) => q.prompt.trim() && q.answer !== undefined && q.answer !== "");
       if (!pool.length) throw new GameError("Add a tie-breaker question in the admin.");
       const src = pool[state.tiebreakCount % pool.length];
@@ -958,10 +982,43 @@ export function applyHostAction(state: RoomState, action: HostAction, now: numbe
       startQuestion(state, now);
       return;
     }
+    case "extraRound": {
+      if (state.phase !== "final") throw new GameError("Encore rounds start from the final screen.");
+      const e = state.content.encore;
+      if (!e?.extraRound) throw new GameError("The extra round is switched off in the admin.");
+      const base = state.content.rounds.find((r) => r.kind === e.extraKind);
+      if (!base) throw new GameError("Pick a round for the encore in the admin.");
+      state.rounds.push({
+        kind: base.kind,
+        title: e.extraTitle.trim() || base.title,
+        subtitle: base.subtitle,
+        count: Math.max(1, e.extraCount || base.count),
+        timerSec: base.timerSec,
+        points: base.points,
+        extra: true,
+        questions: [],
+      });
+      const i = state.rounds.length - 1;
+      enterRound(state, i);
+      if (!state.rounds[i].questions.length) {
+        state.rounds.pop();
+        throw new GameError("No questions left for that round. Add some, or pick another round for the encore in the admin.");
+      }
+      state.slideshow = false;
+      state.finishedAt = null;
+      return;
+    }
+    case "slideshow":
+      if (action.on && state.phase !== "final") throw new GameError("The slideshow plays on the final screen.");
+      state.slideshow = !!action.on;
+      return;
     case "back":
+      if (state.slideshow) return void (state.slideshow = false);
       return goBack(state);
     case "backToLobby":
       for (const r of state.rounds) clearKeys(state, r.questions.map((q) => q.key)), (r.questions = []);
+      state.rounds = state.rounds.filter((r) => !r.extra);
+      state.slideshow = false;
       Object.assign(state, {
         roundIndex: -1,
         qIndex: -1,
@@ -1190,7 +1247,9 @@ export function buildView(
     me: meView,
     confessionCount: state.confessions.length + c.confessions.length,
     myConfessions: me ? state.confessions.filter((x) => x.author === me.name).length : 0,
-    messages: state.phase === "final" || isHost ? c.messages.map((m) => ({ from: m.from, text: m.text })) : [],
+    messages: state.phase === "final" || isHost ? c.messages.filter((m) => m.text.trim() || m.photo).map((m) => ({ from: m.from, text: m.text, photo: m.photo || undefined })) : [],
+    encore: { ...ENCORE_DEFAULT, ...(c.encore ?? {}) },
+    slideshow: state.phase === "final" && !!state.slideshow,
     tie: state.phase === "final" && isTie(state),
     isTiebreak: q?.kind === "tiebreak",
     fact: (() => {
