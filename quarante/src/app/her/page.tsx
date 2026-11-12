@@ -43,6 +43,24 @@ export default function HerPage() {
     setSaving(null);
   }
 
+  async function saveOptions(id: string, options: string[]) {
+    setSaving(id);
+    setS((x) => {
+      if (!x) return x;
+      const answers = { ...(x.answers ?? {}) };
+      const mine = answers[id];
+      if (typeof mine === "number" && mine >= options.length) delete answers[id];
+      return { ...x, answers, questions: (x.questions ?? []).map((q) => (q.id === id ? { ...q, options } : q)) };
+    });
+    try {
+      await api("/api/her", { method: "PUT", body: JSON.stringify({ id, options }) });
+      setErr(null);
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+    setSaving(null);
+  }
+
   if (!s) return <main className="min-h-[100dvh] grid place-items-center label anim-pulse">One moment…</main>;
 
   if (!s.authed)
@@ -103,7 +121,7 @@ export default function HerPage() {
         const list = qs.filter((q) => q.set === g.set);
         if (!list.length) return null;
         return (
-          <section key={g.set} className="mt-14">
+          <section key={g.set} className="card mt-10 px-5 py-6">
             <h2 className="display text-3xl">{g.title}</h2>
             <p className="text-bone/50 text-sm mt-1 mb-6">{g.hint}</p>
             <ol className="space-y-10">
@@ -115,21 +133,12 @@ export default function HerPage() {
                     <img src={q.image} alt="" className="w-full max-h-64 object-cover mb-3" />
                   )}
                   {q.type === "mc" ? (
-                    <div className="space-y-2">
-                      {q.options.map((o, i) => {
-                        const active = answers[q.id] === i;
-                        return (
-                          <button
-                            key={i}
-                            onClick={() => save(q.id, active ? null : i)}
-                            className={`w-full text-left flex items-center gap-3 px-4 py-3 border transition ${active ? "bg-acid text-ink border-acid" : "border-bone/20 hover:border-bone/60"}`}
-                          >
-                            <span className={`font-mono text-xs w-5 ${active ? "text-ink/60" : "text-bone/40"}`}>{LETTERS[i]}</span>
-                            {o}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <ChoiceEditor
+                      q={q}
+                      answer={answers[q.id]}
+                      onPick={(i) => save(q.id, answers[q.id] === i ? null : i)}
+                      onOptions={(opts) => saveOptions(q.id, opts)}
+                    />
                   ) : (
                     <TextAnswer value={answers[q.id] === undefined ? "" : String(answers[q.id])} onSave={(v) => save(q.id, v)} />
                   )}
@@ -158,5 +167,73 @@ function TextAnswer({ value, onSave }: { value: string; onSave: (v: string) => v
       onBlur={() => v.trim() !== value && onSave(v.trim())}
       onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
     />
+  );
+}
+
+/** Her own answer choices: edit any of them, add or remove, and tap the letter to mark her answer. */
+function ChoiceEditor({
+  q,
+  answer,
+  onPick,
+  onOptions,
+}: {
+  q: Q;
+  answer: string | number | undefined;
+  onPick: (i: number) => void;
+  onOptions: (opts: string[]) => void;
+}) {
+  const [opts, setOpts] = useState<string[]>(q.options);
+  useEffect(() => setOpts(q.options), [q.options]);
+  const commit = (next: string[]) => {
+    if (JSON.stringify(next) !== JSON.stringify(q.options)) onOptions(next);
+  };
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-bone/55">Edit the choices if you like. Tap a letter to mark your real answer.</p>
+      {opts.map((o, i) => {
+        const active = answer === i;
+        return (
+          <div key={i} className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onPick(i)}
+              aria-label={`Choose ${LETTERS[i]}`}
+              className={`grid place-items-center w-10 h-10 shrink-0 rounded-full font-mono text-lg font-semibold transition ${
+                active ? "bg-acid text-ink ring-4 ring-acid/25" : "bg-wine text-bone/60 hover:text-bone"
+              }`}
+            >
+              {active ? "✓" : LETTERS[i]}
+            </button>
+            <input
+              className={`box rounded-full ${active ? "border-acid border-2 font-semibold" : ""}`}
+              value={o}
+              maxLength={80}
+              placeholder={`Choice ${LETTERS[i]}`}
+              onChange={(e) => setOpts(opts.map((x, j) => (j === i ? e.target.value : x)))}
+              onBlur={() => commit(opts)}
+            />
+            {opts.length > 2 && (
+              <button
+                type="button"
+                className="label hover:text-rouge px-1"
+                aria-label="Remove this choice"
+                onClick={() => {
+                  const next = opts.filter((_, j) => j !== i);
+                  setOpts(next);
+                  commit(next);
+                }}
+              >
+                ×
+              </button>
+            )}
+          </div>
+        );
+      })}
+      {opts.length < 6 && (
+        <button type="button" className="label hover:text-bone mt-1" onClick={() => setOpts([...opts, ""])}>
+          + Add a choice
+        </button>
+      )}
+    </div>
   );
 }

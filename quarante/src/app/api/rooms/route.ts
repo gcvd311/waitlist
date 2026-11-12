@@ -4,6 +4,8 @@ import { fail, ok } from "@/lib/http";
 import { createRoom, getContent } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+export const revalidate = 0;
 
 export async function POST() {
   try {

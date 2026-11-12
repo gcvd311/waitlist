@@ -20,6 +20,9 @@ function sb(): SupabaseClient {
   if (!_sb) {
     _sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
       auth: { persistSession: false },
+      // Next.js caches fetch() in GET route handlers by default. A game must always read the live room,
+      // or a player who just joined is told they are not in it.
+      global: { fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }) },
     });
   }
   return _sb;

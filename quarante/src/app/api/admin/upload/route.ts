@@ -4,6 +4,8 @@ import { body, fail, ok } from "@/lib/http";
 import { resolvePhotos, uploadPhoto } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+export const revalidate = 0;
 
 export async function POST(req: Request) {
   try {

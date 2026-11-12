@@ -4,6 +4,8 @@ import { getRoom, mutateRoom, onlineSet, resolvePhotos, touch, uploadPhoto } fro
 import type { HostAction, PlayerAction } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+export const revalidate = 0;
 
 type Payload =
   | { auth: { host: string }; action: HostAction }
