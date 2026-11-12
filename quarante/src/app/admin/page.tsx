@@ -505,7 +505,7 @@ function HerLogin({ content, update }: { content: Content; update: Update }) {
 const SETS: { id: QSet | "mostLikely"; label: string; hint: string; extra?: boolean }[] = [
   { id: "knowHer", label: "I · Crystal Clear?", hint: "Questions about {name}. She can give her real answers on her own page, or you type them here. Add a photo to make a picture question. Free text is auto-marked leniently and you can overrule it on the reveal." },
   { id: "past40", label: "II · The Past 40 Years", hint: "1986 to 2026, played in this order. Switch on the ones you want; the rest wait in the bank. Edit any question or add your own." },
-  { id: "men", label: "III · The Men", hint: "Everyone votes for one man per question. The girl behind the most-voted man gets the points, secretly, until the unmasking. Portraits and names are on the Players & portraits page." },
+  { id: "men", label: "III · The Men", hint: "Everyone votes for one man per question; the girl behind the most-voted man gets the points. Open a question to choose which of the three men appear. Photos and names are on the Players & portraits page." },
   { id: "finale", label: "IV · No Further Questions", hint: "A mix: Who Said That? slots (filled from the confessions), stories where the options are the girls, questions about {name}, and the final question." },
   { id: "trivia", label: "General trivia", hint: "For the optional General Trivia round. Each game picks a random set at the difficulty you choose.", extra: true },
   { id: "honoreeVs", label: "Her vs. Everyone", hint: "For the optional Her vs. Everyone round.", extra: true },
@@ -801,6 +801,23 @@ function QuestionEditor({
         <label className="label block mb-1">Question · use {"{name}"} for {name}</label>
         <textarea className="box min-h-[64px] font-serif text-xl" value={q.prompt} onChange={(e) => ch((x) => void (x.prompt = e.target.value))} />
       </div>
+      )}
+
+      {set === "men" && (
+        <div>
+          <label className="label block mb-1">Which men appear</label>
+          <div className="flex flex-wrap gap-2">
+            {([undefined, 0, 1, 2] as const).map((v) => (
+              <button
+                key={String(v)}
+                className={q.manSet === v ? "btn-primary btn-sm" : "btn-ghost btn-sm"}
+                onClick={() => onChange((x) => void (v === undefined ? delete x.manSet : (x.manSet = v)))}
+              >
+                {v === undefined ? "Rotate 1, 2, 3" : `Man ${v + 1}`}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
       {q.optionsFrom === "players" && !q.fromPool && (

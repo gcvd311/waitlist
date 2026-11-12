@@ -61,24 +61,32 @@ export default function JoinForm({ initialCode = "" }: { initialCode?: string })
   const usePortraits = profiles.length > 0;
   const picked = profiles.find((p) => p.id === chosen);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  async function join(profileId?: string, profileName?: string) {
     sfx.unlock();
     setBusy(true);
     setError(null);
+    const who = profileName ?? name;
     try {
       const res = await api<{ pid: string; secret: string }>(`/api/rooms/${code}/join`, {
         method: "POST",
-        body: JSON.stringify(usePortraits ? { name: name || picked?.name, profileId: chosen } : { name, honoree, photo }),
+        body: JSON.stringify(profileId ? { name: who, profileId } : { name, honoree, photo }),
       });
-      store.set(playerKey(code), { pid: res.pid, secret: res.secret, name } satisfies PlayerCreds);
-      store.set("q40:lastName", name);
+      store.set(playerKey(code), { pid: res.pid, secret: res.secret, name: who } satisfies PlayerCreds);
+      store.set("q40:lastName", who);
       sfx.lock();
       router.push(`/play/${code}`);
     } catch (err) {
-      setError((err as Error).message);
+      const msg = (err as Error).message;
+      setError(msg === "Failed to fetch" ? "Couldn’t reach the game. Check your connection and tap your photo again." : msg);
       setBusy(false);
     }
+  }
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (usePortraits) {
+      if (picked) join(picked.id, picked.name);
+    } else join();
   }
 
   return (
@@ -123,7 +131,8 @@ export default function JoinForm({ initialCode = "" }: { initialCode?: string })
 
         {usePortraits && (
           <section className="card px-4 py-5 anim-rise">
-            <p className="font-mono font-semibold uppercase text-xl text-center mb-4 tracking-label">Pick your photo</p>
+            <p className="font-mono font-semibold uppercase text-xl text-center tracking-label">Pick your photo</p>
+            <p className="text-center text-sm text-bone/60 mb-4">Tap your own photo to join.</p>
             <div className="grid grid-cols-3 gap-3">
               {profiles.map((p, i) => {
                 const active = chosen === p.id;
@@ -132,17 +141,20 @@ export default function JoinForm({ initialCode = "" }: { initialCode?: string })
                     type="button"
                     key={p.id}
                     data-profile={p.id}
-                    disabled={p.taken}
+                    disabled={p.taken || busy}
                     onClick={() => {
+                      // One tap joins: her name comes from the portrait.
                       setChosen(p.id);
                       setName(p.name);
                       sfx.tap();
+                      join(p.id, p.name);
                     }}
                     className="text-left anim-rise disabled:cursor-not-allowed"
                     style={{ animationDelay: `${i * 60}ms` }}
                   >
                     <Portrait photo={p.photo} name={p.name} dim={p.taken} className={active ? "outline outline-[3px] outline-acid" : ""}>
                       {active && <span className="absolute right-1.5 top-1.5 grid place-items-center w-7 h-7 rounded-full bg-acid text-ink text-sm font-bold">✓</span>}
+                      {active && busy && <span className="absolute inset-0 grid place-items-center bg-ink/60 font-mono uppercase text-sm font-semibold anim-pulse">Joining…</span>}
                       {p.taken && <span className="chip absolute left-1.5 bottom-1.5">Ready</span>}
                     </Portrait>
                     <p className={`mt-1 text-sm text-center font-semibold truncate ${p.taken ? "text-bone/40" : active ? "text-acid" : ""}`}>{p.name}</p>
@@ -153,7 +165,7 @@ export default function JoinForm({ initialCode = "" }: { initialCode?: string })
           </section>
         )}
 
-        {peek && (!usePortraits || picked) && (
+        {peek && !usePortraits && (
           <div className="anim-rise px-3">
             <label className="label block mb-2" htmlFor="name">
               {usePortraits ? "Confirm your name" : "Your name"}
@@ -184,14 +196,19 @@ export default function JoinForm({ initialCode = "" }: { initialCode?: string })
           </>
         )}
 
-        {error && <p className="text-rouge text-sm">{error}</p>}
+        {error && (
+          <div className="fixed top-3 inset-x-3 z-50 mx-auto max-w-md rounded-2xl bg-[#FFF5EC] text-[#7A0C19] px-4 py-3 shadow-xl anim-rise">
+            <p className="font-semibold">Couldn’t join</p>
+            <p className="text-sm mt-0.5">{error}</p>
+          </div>
+        )}
 
-        {(
+        {!(peek && usePortraits) && (
           <button
             className="btn-primary mx-3 text-xl py-4 mt-auto"
             disabled={busy || code.length !== 4 || (usePortraits ? !chosen : !name.trim())}
           >
-            {busy ? "Joining…" : !peek ? "Join" : usePortraits ? (picked ? "Continue" : "Pick your photo") : "Take a seat"}
+            {busy ? "Joining…" : !peek ? "Join" : "Take a seat"}
           </button>
         )}
       </form>

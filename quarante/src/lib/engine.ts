@@ -230,8 +230,14 @@ export function girlNames(state: RoomState): string[] {
 
 function buildCast(state: RoomState): CastMember[] {
   return (state.content.players ?? [])
-    .filter((p) => p.maleName.trim())
-    .map((p) => ({ token: uid(8), profileId: p.id, maleName: p.maleName.trim(), photos: p.malePhotos.filter(Boolean) }));
+    .filter((p) => p.maleName.trim() || p.malePhotos.some(Boolean))
+    .map((p) => ({
+      token: uid(8),
+      profileId: p.id,
+      maleName: p.maleName.trim() || p.name,
+      photos: [0, 1, 2].map((k) => p.malePhotos[k] || ""),
+      names: [0, 1, 2].map((k) => (k === 0 ? p.maleName : p.maleNames?.[k] ?? "").trim()),
+    }));
 }
 
 export function buildRound(state: RoomState, index: number): RoomQuestion[] {
@@ -272,14 +278,18 @@ export function buildRound(state: RoomState, index: number): RoomQuestion[] {
       return pick(c.questions.men ?? [], round).map((q, j) => {
         const lineup = shuffle(state.cast); // one fresh order per question, the same on every phone
         const chosen = q.type === "kfm" ? lineup.slice(0, 3) : lineup;
+        // Which of her three men: the question's choice, or rotate 1, 2, 3, 1…
+        const slot = typeof q.manSet === "number" ? q.manSet : j % 3;
+        const photoOf = (m: CastMember) => m.photos[slot] || m.photos.find(Boolean) || "";
+        const nameOf = (m: CastMember) => m.names[slot] || m.maleName;
         return {
           key: key(j),
           kind: "men" as const,
           type: q.type === "kfm" ? ("kfm" as const) : ("vote" as const),
           prompt: fillName(q.prompt, name),
-          options: chosen.map((m) => m.maleName),
+          options: chosen.map(nameOf),
           optionIds: chosen.map((m) => m.token),
-          optionPhotos: chosen.map((m) => (m.photos.length ? m.photos[j % m.photos.length] : "")),
+          optionPhotos: chosen.map(photoOf),
           points: 0,
           timerSec: round.timerSec,
           bonus: q.bonus,
@@ -372,8 +382,7 @@ export function computeAwards(state: RoomState, q: RoomQuestion): void {
   const sc = state.content.scoring;
 
   if (q.kind === "men") {
-    // Votes for a man are points for the girl he secretly is. Kept out of every score until the unmasking.
-    if (!state.hiddenKeys.includes(q.key)) state.hiddenKeys.push(q.key);
+    // Votes for a man are points for the girl he is.
     for (const pid of Object.keys(answers)) if (sc.menParticipation > 0 && state.players[pid]) awards[pid] = sc.menParticipation;
     if (q.type === "vote" && sc.menWinner > 0) {
       const counts = q.options.map((_, i) => Object.values(answers).filter((a) => a.value === i).length);
@@ -567,8 +576,10 @@ function advance(state: RoomState, now: number) {
       if (state.current?.kind === "tiebreak") return finish(state, now);
       const r = state.rounds[state.roundIndex];
       if (state.qIndex + 1 < r.questions.length) gotoQuestion(state, state.qIndex + 1, now);
-      else if (r.kind === "men" && state.cast.length) startUnmask(state);
-      else afterRound(state);
+      else {
+        if (r.kind === "men") state.menRevealed = true; // no unmasking: everyone already knows who is who
+        afterRound(state);
+      }
       return;
     }
     case "unmask":
@@ -1000,7 +1011,7 @@ function unmaskView(state: RoomState): RoomView["unmask"] {
     return {
       token: tok,
       maleName: m.maleName,
-      malePhoto: m.photos[0],
+      malePhoto: m.photos.find(Boolean),
       votes: tally[tok]?.votes ?? 0,
       wins: tally[tok]?.wins ?? 0,
       revealed,
