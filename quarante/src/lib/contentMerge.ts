@@ -21,6 +21,8 @@ export function mergeContent(raw: Partial<Content> | null | undefined): Content 
     honoreeAnswers: raw.honoreeAnswers ?? {},
     encore: { ...d.encore!, ...(raw.encore ?? {}) },
   };
+  // The bonus game arrived later: give older saves its round settings (its questions merge in above).
+  if (!merged.rounds.some((r) => r.kind === "likely")) merged.rounds = [...merged.rounds, ...d.rounds.filter((r) => r.kind === "likely")];
   // Older saves kept the starter trivia outside the content; fold it in so every question is editable.
   if (!raw.triviaSeeded) {
     merged.questions.trivia = [...(raw.questions?.trivia ?? []), ...(raw.useBuiltInTrivia === false ? [] : TRIVIA_BANK.map((q) => ({ ...q })))];

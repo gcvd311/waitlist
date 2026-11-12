@@ -646,11 +646,12 @@ function HerLogin({ content, update }: { content: Content; update: Update }) {
 
 // ───────────────────────── Questions ─────────────────────────
 
-const SETS: { id: QSet | "mostLikely"; label: string; hint: string; extra?: boolean }[] = [
+const SETS: { id: QSet | "mostLikely" | "likely"; label: string; hint: string; extra?: boolean }[] = [
   { id: "knowHer", label: "I · Crystal Clear?", hint: "Questions about {name}. She can give her real answers on her own page, or you type them here. Add a photo to make a picture question. Free text is auto-marked leniently and you can overrule it on the reveal." },
   { id: "past40", label: "II · The Past 40 Years", hint: "1986 to 2026, played in this order. Switch on the ones you want; the rest wait in the bank. Edit any question or add your own." },
   { id: "men", label: "III · The Men", hint: "Everyone votes for one man per question; the girl behind the most-voted man gets the points. Open a question to choose which of the three men appear. Photos and names are on the Players & portraits page." },
   { id: "finale", label: "IV · No Further Questions", hint: "A mix: Who Said That? slots (filled from the confessions), stories where the options are the girls, questions about {name}, and the final question." },
+  { id: "likely", label: "Bonus · MOST LIKELY TO...", hint: "A bonus game, separate from the 40. Everyone votes on the girls’ portraits; whoever gets the most votes earns the points (a tie pays everyone tied). Start it from the host controls: Jump to… or the final screen. Every question here is played, in this order." },
   { id: "trivia", label: "General trivia", hint: "For the optional General Trivia round. Each game picks a random set at the difficulty you choose.", extra: true },
   { id: "honoreeVs", label: "Her vs. Everyone", hint: "For the optional Her vs. Everyone round.", extra: true },
   { id: "mostLikely", label: "Most Likely To", hint: "For the optional Most Likely To round.", extra: true },
@@ -659,7 +660,7 @@ const SETS: { id: QSet | "mostLikely"; label: string; hint: string; extra?: bool
 ];
 
 function QuestionsTab({ content, update }: { content: Content; update: Update }) {
-  const [set, setSet] = useState<QSet | "mostLikely">("knowHer");
+  const [set, setSet] = useState<QSet | "mostLikely" | "likely">("knowHer");
   const meta = SETS.find((s) => s.id === set)!;
   return (
     <div>
@@ -670,7 +671,7 @@ function QuestionsTab({ content, update }: { content: Content; update: Update })
           <button key={s.id} onClick={() => setSet(s.id)} className={`btn-sm border ${set === s.id ? "border-acid text-acid" : "border-bone/20 text-bone/60 hover:text-bone"}`}>
             {s.label}
             <span className="font-mono text-xs ml-2 opacity-60">
-              {s.id === "mostLikely" ? content.questions.mostLikely.length : (content.questions[s.id as QSet] ?? []).filter((q) => !q.off).length}
+              {s.id === "mostLikely" || s.id === "likely" ? content.questions[s.id].length : (content.questions[s.id as QSet] ?? []).filter((q) => !q.off).length}
             </span>
           </button>
           </span>
@@ -696,8 +697,44 @@ function QuestionsTab({ content, update }: { content: Content; update: Update })
           ))}
         </div>
       )}
-      {set === "mostLikely" ? <MostLikelyEditor content={content} update={update} hint={meta.hint} /> : <QuestionList set={set} content={content} update={update} title={meta.label.replace(/^[IV]+ · /, "")} hint={meta.hint.replace(/\{name\}/g, content.honoree.name)} />}
+      {set === "likely" ? <BonusGameEditor content={content} update={update} hint={meta.hint} /> : set === "mostLikely" ? <MostLikelyEditor content={content} update={update} hint={meta.hint} /> : <QuestionList set={set} content={content} update={update} title={meta.label.replace(/^[IV]+ · /, "")} hint={meta.hint.replace(/\{name\}/g, content.honoree.name)} />}
     </div>
+  );
+}
+
+function BonusGameEditor({ content, update, hint }: { content: Content; update: Update; hint: string }) {
+  const list = content.questions.likely ?? [];
+  const ri = content.rounds.findIndex((r) => r.kind === "likely");
+  const r = content.rounds[ri];
+  return (
+    <Section
+      title="MOST LIKELY TO..."
+      hint={hint}
+      action={
+        <button className="btn-ghost btn-sm" onClick={() => update((c) => void (c.questions.likely = [...(c.questions.likely ?? []), { id: uid(6), prompt: "Who’s most likely to " }]))}>
+          Add
+        </button>
+      }
+    >
+      {r && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6 max-w-xl">
+          <Num label="Points for the most votes" value={r.points} onChange={(v) => update((c) => void (c.rounds[ri].points = v))} />
+          <Num label="Timer (sec, 0 = you close it)" value={r.timerSec} onChange={(v) => update((c) => void (c.rounds[ri].timerSec = v))} />
+        </div>
+      )}
+      <div className="space-y-2">
+        {list.map((q, i) => (
+          <div key={q.id} className="flex gap-2 items-center">
+            <span className="font-mono text-xs text-bone/40 w-6 text-right">{i + 1}</span>
+            <input className="box" value={q.prompt} onChange={(e) => update((c) => void (c.questions.likely[i].prompt = e.target.value))} />
+            <button className="label hover:text-rouge" onClick={() => update((c) => void c.questions.likely.splice(i, 1))}>
+              Delete
+            </button>
+          </div>
+        ))}
+        {!list.length && <p className="text-bone/45 font-serif italic text-xl">No questions yet. Add one.</p>}
+      </div>
+    </Section>
   );
 }
 
@@ -1254,6 +1291,7 @@ const KIND_LABEL: Record<RoundKind, string> = {
   trivia: "General trivia",
   whoSaid: "Confessions",
   mostLikely: "Anonymous vote",
+  likely: "Bonus game: vote on the girls",
   honoreeVs: "She answers, they predict",
   final40: "Wagers",
 };
@@ -1266,7 +1304,7 @@ function RoundsTab({ content, update }: { content: Content; update: Update }) {
         hint={`The default game is four rounds of ten: ${content.rounds.filter((r) => r.enabled).reduce((n, r) => n + r.count, 0)} questions with the current settings, plus any bonus questions. Optional rounds sit below, switched off. Timer 0 means no clock: the host closes each question.`}
       >
         <div className="space-y-4">
-          {content.rounds.map((r, i) => (
+          {content.rounds.map((r, i) => r.kind === "likely" ? null : (
             <div key={r.kind} className={`border border-bone/15 p-4 ${r.enabled ? "" : "opacity-50"}`}>
               <div className="flex items-center gap-3 mb-3">
                 <input type="checkbox" className="accent-acid w-4 h-4" checked={r.enabled} onChange={(e) => update((c) => void (c.rounds[i].enabled = e.target.checked))} />

@@ -105,7 +105,7 @@ export function cleanName(raw: string): string {
 
 export function createRoomState(code: string, content: Content, now: number): RoomState {
   const rounds: RoomRound[] = content.rounds
-    .filter((r) => r.enabled)
+    .filter((r) => r.enabled && r.kind !== "likely") // the bonus game is launched by the host, never part of the 40
     .map((r) => ({
       kind: r.kind,
       title: r.title,
@@ -355,6 +355,30 @@ export function buildRound(state: RoomState, index: number): RoomQuestion[] {
         timerSec: round.timerSec,
       }));
     }
+    case "likely": {
+      // The girls themselves, by portrait. A fresh order per question, the same on every phone.
+      const girls = (c.players ?? []).map((pr) => {
+        const claimed = Object.values(state.players).find((p) => p.profileId === pr.id);
+        return { id: pr.id, name: (claimed?.name ?? pr.name).trim() || pr.name, photo: pr.photo || claimed?.photo || "" };
+      });
+      if (girls.length < 2) return [];
+      return c.questions.likely
+        .filter((p) => p.prompt.trim())
+        .map((p, j) => {
+          const order = shuffle(girls);
+          return {
+            key: key(j),
+            kind: "likely" as const,
+            type: "vote" as const,
+            prompt: fillName(p.prompt, name),
+            options: order.map((g) => g.name),
+            optionIds: order.map((g) => g.id),
+            optionPhotos: order.map((g) => g.photo),
+            points: round.points,
+            timerSec: round.timerSec,
+          };
+        });
+    }
     case "mostLikely":
       return shuffle(c.questions.mostLikely.filter((p) => p.prompt.trim() && fresh(p.prompt)))
         .slice(0, round.count)
@@ -419,6 +443,16 @@ export function computeAwards(state: RoomState, q: RoomQuestion): void {
         });
       }
     }
+  } else if (q.kind === "likely") {
+    // Most votes wins the points; a tie at the top pays everyone in it.
+    const counts = q.options.map((_, i) => Object.values(answers).filter((a) => a.value === i).length);
+    const max = Math.max(0, ...counts);
+    if (max > 0)
+      counts.forEach((n, i) => {
+        if (n !== max) return;
+        const girl = Object.values(state.players).find((p) => p.profileId === q.optionIds?.[i]);
+        if (girl) awards[girl.id] = q.points;
+      });
   } else if (q.type === "vote") {
     const counts: Record<string, number> = {};
     Object.values(answers).forEach((a) => {
@@ -785,7 +819,7 @@ export function applyPlayerAction(state: RoomState, pid: string, action: PlayerA
     bucket[pid] = { value, at: now, frac } satisfies Answer;
   }
 
-  if (state.content.scoring.autoReveal && q.kind !== "men" && everyoneAnswered(state)) reveal(state);
+  if ((q.kind === "likely" || (state.content.scoring.autoReveal && q.kind !== "men")) && everyoneAnswered(state)) reveal(state);
   return;
 }
 
@@ -1008,6 +1042,43 @@ export function applyHostAction(state: RoomState, action: HostAction, now: numbe
       state.finishedAt = null;
       return;
     }
+    case "bonusGame": {
+      // MOST LIKELY TO... slots in right after the current round, so the main game carries on afterwards.
+      const base = state.content.rounds.find((r) => r.kind === "likely");
+      if (!base) throw new GameError("The bonus game isn’t set up. Add its questions in the admin.");
+      if (state.current && (state.phase === "question" || state.phase === "wager")) clearKeys(state, [state.current.key]);
+      // Before a round that hasn't started; otherwise after the current one (or at the end, from the final).
+      const at =
+        state.phase === "final" || state.roundIndex >= state.rounds.length
+          ? state.rounds.length
+          : state.phase === "lobby"
+            ? 0
+            : state.phase === "round_intro"
+              ? state.roundIndex
+              : state.roundIndex + 1;
+      state.rounds.splice(at, 0, {
+        kind: "likely",
+        title: base.title || "MOST LIKELY TO...",
+        subtitle: base.subtitle,
+        count: 0,
+        timerSec: base.timerSec,
+        points: base.points || 10,
+        extra: true,
+        bonusGame: true,
+        questions: [],
+      });
+      enterRound(state, at);
+      if (!state.rounds[at].questions.length) {
+        state.rounds.splice(at, 1);
+        throw new GameError("Add at least one MOST LIKELY TO question, and two players with portraits, in the admin.");
+      }
+      state.rounds[at].count = state.rounds[at].questions.length;
+      state.slideshow = false;
+      state.paused = false;
+      state.pausedRemaining = null;
+      state.finishedAt = null;
+      return;
+    }
     case "jump": {
       const target = Math.floor(Number(action.round));
       if (!Number.isFinite(target) || target < 0) throw new GameError("Pick a round.");
@@ -1096,7 +1167,7 @@ export function buildReveal(state: RoomState, q: RoomQuestion): RevealData {
   let voteWinners: string[] | undefined;
   if (q.type === "vote") {
     const max = Math.max(0, ...distribution);
-    voteWinners = max >= (q.kind === "men" ? 1 : 2) ? q.options.filter((_, i) => distribution[i] === max) : [];
+    voteWinners = max >= (q.kind === "men" || q.kind === "likely" ? 1 : 2) ? q.options.filter((_, i) => distribution[i] === max) : [];
   }
   let kfm: RevealData["kfm"];
   if (q.type === "kfm") {
@@ -1157,7 +1228,7 @@ function unmaskView(state: RoomState): RoomView["unmask"] {
 /** Votes stay anonymous, and while scores are sealed nobody sees points. */
 function privateReveal(r: RevealData, q: RoomQuestion, viewer: { role: "host" } | { role: "player"; pid: string }, sealed: boolean): RevealData {
   let results = r.results;
-  if (q.kind === "men" || q.kind === "mostLikely") results = viewer.role === "player" ? results.filter((x) => x.playerId === viewer.pid) : [];
+  if (q.kind === "men" || q.kind === "mostLikely" || q.kind === "likely") results = viewer.role === "player" ? results.filter((x) => x.playerId === viewer.pid) : [];
   if (q.kind === "men") results = results.map((x) => ({ ...x, correct: false, points: 0 }));
   if (sealed) results = results.map((x) => ({ ...x, points: 0 }));
   return { ...r, results, teamResults: sealed ? [] : r.teamResults };
@@ -1232,7 +1303,7 @@ export function buildView(
     progress: (() => {
       // Planned questions across the enabled rounds, and how far in we are.
       // Bonus questions don't count towards the 40.
-      const main = (r: RoomRound) => (r.questions.length ? Math.min(r.count, r.questions.filter((x) => !x.bonus).length) : r.count);
+      const main = (r: RoomRound) => (r.bonusGame ? 0 : r.questions.length ? Math.min(r.count, r.questions.filter((x) => !x.bonus).length) : r.count);
       const total = state.rounds.reduce((n, r) => n + main(r), 0);
       const cur = state.rounds[state.roundIndex];
       const before = state.rounds.slice(0, Math.max(0, state.roundIndex)).reduce((n, r) => n + main(r), 0);

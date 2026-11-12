@@ -234,7 +234,7 @@ export function OptionLetter({ i, active }: { i: number; active?: boolean }) {
 export function revealHeadline(view: RoomView): string {
   const q = view.question!;
   const r = view.reveal!;
-  if (q.kind === "men") {
+  if (q.kind === "men" || q.kind === "likely") {
     if (q.type === "kfm") return "The verdicts are in.";
     const w = r.voteWinners ?? [];
     if (!w.length) return "Nobody voted.";

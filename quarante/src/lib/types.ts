@@ -1,6 +1,6 @@
 // ───────────────────────── Content (edited in /admin, stored as JSON) ─────────────────────────
 
-export type RoundKind = "knowHer" | "past40" | "men" | "finale" | "trivia" | "whoSaid" | "mostLikely" | "honoreeVs" | "final40";
+export type RoundKind = "knowHer" | "past40" | "men" | "finale" | "trivia" | "whoSaid" | "mostLikely" | "honoreeVs" | "final40" | "likely";
 export type QType = "mc" | "text" | "number" | "vote" | "kfm";
 export type Difficulty = "easy" | "medium" | "hard";
 
@@ -77,6 +77,7 @@ export interface Content {
     final40: ContentQuestion[];
     trivia: ContentQuestion[]; // custom trivia, added to the built-in bank
     mostLikely: { id: string; prompt: string }[];
+    likely: { id: string; prompt: string }[]; // the bonus game: MOST LIKELY TO..., voted on the girls' portraits
     tiebreakers: ContentQuestion[];
   };
   useBuiltInTrivia: boolean; // legacy; the bank now lives in questions.trivia
@@ -145,6 +146,7 @@ export interface RoomRound {
   points: number;
   includeBonus?: boolean;
   extra?: boolean; // an encore round added from the final screen
+  bonusGame?: boolean; // MOST LIKELY TO...: played on demand, outside the 40
   questions: RoomQuestion[]; // built when the round starts
 }
 
@@ -310,6 +312,7 @@ export type HostAction =
   | { type: "tiebreak" }
   | { type: "extraRound" }
   | { type: "slideshow"; on: boolean }
+  | { type: "bonusGame" }
   | { type: "jump"; round: number } // a round's opening, or past the last round for the final scores
   | { type: "backToLobby" }
   | { type: "back" };
