@@ -85,8 +85,21 @@ export interface Content {
   honoreePassword: string; // her own login at /her
   honoreeAnswers: Record<string, string | number>; // answers she gave in advance, by question id
   confessions: { id: string; author: string; text: string }[];
-  messages: { id: string; from: string; text: string }[];
+  messages: { id: string; from: string; text: string; photo?: string }[];
+  encore?: Encore; // the host's extras on the final screen
   updatedAt: number;
+}
+
+/** Optional extras for the final screen, each switched on or off in the admin. */
+export interface Encore {
+  extraRound: boolean;
+  extraKind: RoundKind;
+  extraTitle: string;
+  extraCount: number;
+  tiebreaker: boolean;
+  slideshow: boolean;
+  slideSeconds: number;
+  image: string; // a picture for the final screen and the slideshow's first slide
 }
 
 // ───────────────────────── Room state (server-side, one JSON blob per room) ─────────────────────────
@@ -131,6 +144,7 @@ export interface RoomRound {
   timerSec: number;
   points: number;
   includeBonus?: boolean;
+  extra?: boolean; // an encore round added from the final screen
   questions: RoomQuestion[]; // built when the round starts
 }
 
@@ -180,6 +194,7 @@ export interface RoomState {
   menRevealed: boolean;
   unmaskStep: number;
   unmaskOrder: string[]; // tokens, fewest votes first
+  slideshow?: boolean; // the messages slideshow is on the big screen
 }
 
 // ───────────────────────── What clients receive ─────────────────────────
@@ -241,7 +256,7 @@ export interface RoomView {
   teams: PublicTeam[];
   players: PublicPlayer[];
   round: { index: number; total: number; kind: RoundKind; title: string; subtitle: string; qIndex: number; qCount: number } | null;
-  roundTitles: { kind: RoundKind; title: string; count: number }[];
+  roundTitles: { kind: RoundKind; title: string; subtitle: string; count: number }[];
   question: (Omit<RoomQuestion, "answer" | "accept"> & { answer?: string | number; accept?: string[] }) | null;
   answeredIds: string[];
   eligibleIds: string[];
@@ -258,7 +273,9 @@ export interface RoomView {
   } | null;
   confessionCount: number;
   myConfessions: number;
-  messages: { from: string; text: string }[];
+  messages: { from: string; text: string; photo?: string }[];
+  encore: Encore;
+  slideshow: boolean;
   tie: boolean;
   isTiebreak: boolean;
   fact: string | null;
@@ -291,6 +308,8 @@ export type HostAction =
   | { type: "kick"; playerId: string }
   | { type: "release"; playerId: string }
   | { type: "tiebreak" }
+  | { type: "extraRound" }
+  | { type: "slideshow"; on: boolean }
   | { type: "backToLobby" }
   | { type: "back" };
 

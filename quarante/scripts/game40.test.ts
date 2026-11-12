@@ -188,3 +188,48 @@ console.log(`game40 (incl. three men): ${pass} checks passed`);
   ok(kfm.options.length === content.players.length, "Kill / F / Marry shows the whole lineup");
 }
 console.log(`game40 (incl. back, kfm): ${pass} checks passed`);
+
+// Encore: extra round, tie-breaker on demand, slideshow
+{
+  const c = structuredClone(content);
+  c.rounds = c.rounds.map((r) => ({ ...r, enabled: r.kind === "knowHer" }));
+  c.rounds.find((r) => r.kind === "knowHer")!.count = 3;
+  c.questions.knowHer = c.questions.knowHer.map((q, i) => ({ ...q, prompt: `Her question ${i}`, answer: 0, options: ["a", "b"], type: "mc" as const, placeholder: false, off: i >= 3 }));
+  c.messages = [{ id: "m1", from: "Bea", text: "Happy birthday", photo: "data:image/png;base64,P" }];
+  c.encore = { extraRound: true, extraKind: "knowHer", extraTitle: "Encore", extraCount: 2, tiebreaker: true, slideshow: true, slideSeconds: 8, image: "" };
+  c.questions.tiebreakers = [{ id: "tb", type: "number", prompt: "How many?", answer: 40 }];
+  const se = createRoomState("ENC", c, now());
+  const pe = joinRoom(se, "", { now: now(), isOnline: () => true, profileId: c.players[1].id });
+  assert.throws(() => applyHostAction(se, { type: "extraRound" }, now()), GameError);
+  pass++;
+  applyHostAction(se, { type: "start" }, now());
+  let g = 0;
+  while (phase(se) !== "final" && g++ < 40) applyHostAction(se, { type: "next" }, now());
+  ok(phase(se) === "final", "game reaches the final");
+  const asked = new Set(se.rounds[0].questions.map((q) => q.prompt));
+  ok(buildView(se, { role: "host" }, now(), new Set([pe.id])).encore.extraRound, "encore settings reach the host screen");
+  applyHostAction(se, { type: "slideshow", on: true }, now());
+  ok(se.slideshow && buildView(se, { role: "player", pid: pe.id }, now(), new Set([pe.id])).slideshow, "slideshow on, phones know");
+  ok(buildView(se, { role: "player", pid: pe.id }, now(), new Set([pe.id])).messages[0].photo === "data:image/png;base64,P", "message photos reach the screen");
+  applyHostAction(se, { type: "slideshow", on: false }, now());
+  ok(!se.slideshow, "slideshow off");
+  applyHostAction(se, { type: "tiebreak" }, now());
+  ok(se.current?.kind === "tiebreak", "tie-breaker on demand, even without a tie");
+  applyHostAction(se, { type: "next" }, now());
+  applyHostAction(se, { type: "next" }, now());
+  ok(phase(se) === "final", "back to the final after the tie-breaker");
+  applyHostAction(se, { type: "extraRound" }, now());
+  ok(phase(se) === "round_intro" && se.rounds.length === 2 && se.rounds[1].title === "Encore", "extra round starts");
+  const extra = se.rounds[1].questions;
+  ok(extra.length === 2 && extra.every((q) => !asked.has(q.prompt)), "extra round only uses unseen questions, including switched-off ones");
+  g = 0;
+  while (phase(se) !== "final" && g++ < 40) applyHostAction(se, { type: "next" }, now());
+  ok(phase(se) === "final", "and returns to the final");
+  c.encore.extraRound = false;
+  se.content.encore!.extraRound = false;
+  assert.throws(() => applyHostAction(se, { type: "extraRound" }, now()), GameError);
+  pass++;
+  applyHostAction(se, { type: "backToLobby" }, now());
+  ok(se.rounds.length === 1, "play again drops the encore round");
+}
+console.log(`game40 (incl. encore): ${pass} checks passed`);

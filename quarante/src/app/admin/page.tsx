@@ -6,8 +6,8 @@ import { api, hostKey, resizeImage, store } from "@/lib/client";
 import { Wordmark } from "@/components/ui";
 import { ImportBox, PlayersTab } from "@/components/AdminPlayers";
 import { DEFAULT_CONTENT } from "@/lib/defaultContent";
-import { uid } from "@/lib/engine";
-import type { Content, ContentQuestion, QType, RoundKind } from "@/lib/types";
+import { ENCORE_DEFAULT, uid } from "@/lib/engine";
+import type { Content, ContentQuestion, Encore, QType, RoundKind } from "@/lib/types";
 
 type Tab = "her" | "rounds" | "questions" | "friends" | "play" | "players";
 type QSet = "knowHer" | "past40" | "men" | "finale" | "honoreeVs" | "final40" | "trivia" | "tiebreakers";
@@ -409,6 +409,76 @@ function HerTab({ content, update }: { content: Content; update: Update }) {
           {!h.facts.length && <p className="text-bone/40 font-serif italic text-xl">Nothing yet.</p>}
         </div>
       </Section>
+    </div>
+  );
+}
+
+async function uploadFile(f: File): Promise<string> {
+  const dataUrl = await new Promise<string>((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result));
+    r.onerror = rej;
+    r.readAsDataURL(f);
+  });
+  const small = await shrink(dataUrl, 1600);
+  const { url } = await api<{ url: string }>("/api/admin/upload", { method: "POST", body: JSON.stringify({ dataUrl: small }) });
+  return url;
+}
+
+/** Scale a photo down so uploads stay quick on party wifi. PNGs keep their transparency. */
+function shrink(dataUrl: string, max: number): Promise<string> {
+  return new Promise((res) => {
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      if (k === 1 && dataUrl.length < 2_500_000) return res(dataUrl);
+      const cv = document.createElement("canvas");
+      cv.width = Math.round(img.width * k);
+      cv.height = Math.round(img.height * k);
+      cv.getContext("2d")!.drawImage(img, 0, 0, cv.width, cv.height);
+      res(dataUrl.startsWith("data:image/png") ? cv.toDataURL("image/png") : cv.toDataURL("image/jpeg", 0.86));
+    };
+    img.onerror = () => res(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+function ImageSlot({ url, onChange, label, className = "w-28 h-28" }: { url?: string; onChange: (url: string) => void; label: string; className?: string }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="text-center shrink-0">
+      <label className={`${className} rounded-2xl border-2 border-dashed border-bone/25 grid place-items-center text-center text-sm text-bone/55 cursor-pointer hover:border-acid overflow-hidden`}>
+        {busy ? (
+          "Uploading…"
+        ) : url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={url} alt="" className="w-full h-full object-cover" />
+        ) : (
+          label
+        )}
+        <input
+          type="file"
+          accept="image/png,image/webp,image/jpeg"
+          className="hidden"
+          onChange={async (e) => {
+            const f = e.target.files?.[0];
+            if (!f) return;
+            setBusy(true);
+            try {
+              onChange(await uploadFile(f));
+            } catch (err) {
+              alert((err as Error).message);
+            }
+            setBusy(false);
+            e.target.value = "";
+          }}
+        />
+      </label>
+      {url && (
+        <button className="label hover:text-rouge mt-1" onClick={() => onChange("")}>
+          Remove
+        </button>
+      )}
     </div>
   );
 }
@@ -1066,7 +1136,7 @@ function FriendsTab({ content, update }: { content: Content; update: Update }) {
 
       <Section
         title="Messages for her"
-        hint="Shown slowly, one at a time, on the final screen."
+        hint="Played as a slideshow from the final screen, one message at a time. Add a photo to any message; without one, her photos fill in."
         action={
           <button className="btn-ghost btn-sm" onClick={() => update((c) => void c.messages.push({ id: uid(8), from: "", text: "" }))}>
             Add
@@ -1075,9 +1145,10 @@ function FriendsTab({ content, update }: { content: Content; update: Update }) {
       >
         <div className="space-y-3">
           {content.messages.map((x, i) => (
-            <div key={x.id} className="grid grid-cols-[8rem_1fr_auto] gap-2 items-start">
+            <div key={x.id} className="grid grid-cols-[5rem_8rem_1fr_auto] gap-2 items-start">
+              <ImageSlot url={x.photo} label="Photo" className="w-20 h-20 text-xs" onChange={(url) => update((c) => void (c.messages[i].photo = url || undefined))} />
               <input className="box" placeholder="From" value={x.from} onChange={(e) => update((c) => void (c.messages[i].from = e.target.value))} />
-              <textarea className="box min-h-[64px]" value={x.text} onChange={(e) => update((c) => void (c.messages[i].text = e.target.value))} />
+              <textarea className="box min-h-[80px]" placeholder="The message" value={x.text} onChange={(e) => update((c) => void (c.messages[i].text = e.target.value))} />
               <button className="label hover:text-rouge pt-3" onClick={() => update((c) => void c.messages.splice(i, 1))}>
                 Delete
               </button>
@@ -1203,6 +1274,8 @@ function RoundsTab({ content, update }: { content: Content; update: Update }) {
         </p>
       </Section>
 
+      <EncoreSection content={content} update={update} />
+
       {content.teamsEnabled && <Section title="Teams">
         <div className="grid sm:grid-cols-2 gap-4">
           {content.teams.map((t, i) => (
@@ -1211,6 +1284,78 @@ function RoundsTab({ content, update }: { content: Content; update: Update }) {
         </div>
       </Section>}
     </div>
+  );
+}
+
+const ENCORE_KINDS: RoundKind[] = ["trivia", "past40", "knowHer", "mostLikely", "whoSaid", "men", "finale"];
+
+function EncoreSection({ content, update }: { content: Content; update: Update }) {
+  const e = { ...ENCORE_DEFAULT, ...(content.encore ?? {}) };
+  const set = (fn: (x: Encore) => void) =>
+    update((c) => {
+      c.encore = { ...ENCORE_DEFAULT, ...(c.encore ?? {}) };
+      fn(c.encore);
+    });
+  return (
+    <Section
+      title="After the winner"
+      hint="Extras for the final screen. Each one switched on here gets a button in the host controls once the winner is announced. Everyone’s scores always show on that screen."
+    >
+      <div className="space-y-5">
+        <div className="flex gap-5 items-start">
+          <ImageSlot url={e.image} label="Add a picture" className="w-32 h-40" onChange={(url) => set((x) => void (x.image = url))} />
+          <p className="text-sm text-bone/60 pt-2">
+            A picture for the final screen, next to the winner. It also opens the slideshow.
+            <span className="block text-bone/40 mt-1">Without one, the cat sits there instead.</span>
+          </p>
+        </div>
+
+        <Toggle
+          on={e.slideshow}
+          set={(v) => set((x) => void (x.slideshow = v))}
+          label={`Messages slideshow for ${content.honoree.name}`}
+          hint={`Your friends’ messages, one at a time, full screen. ${content.messages.length} written so far, in the Friends tab.`}
+        />
+        {e.slideshow && (
+          <div className="ml-7 max-w-[12rem]">
+            <Num label="Seconds per slide" value={e.slideSeconds} onChange={(v) => set((x) => void (x.slideSeconds = Math.max(3, v)))} />
+          </div>
+        )}
+
+        <Toggle
+          on={e.tiebreaker}
+          set={(v) => set((x) => void (x.tiebreaker = v))}
+          label="Tie-breaker button"
+          hint={`Always on offer, not only when two are level. Closest guess wins 10 points. ${content.questions.tiebreakers.filter((q) => q.prompt.trim()).length} tie-breaker questions ready, in Questions.`}
+        />
+
+        <Toggle
+          on={e.extraRound}
+          set={(v) => set((x) => void (x.extraRound = v))}
+          label="Extra round"
+          hint="One more round after the winner, if the night isn’t over. It only uses questions nobody has seen tonight, including ones switched off in the bank. Points add to the totals."
+        />
+        {e.extraRound && (
+          <div className="ml-7 grid sm:grid-cols-3 gap-3">
+            <label className="block">
+              <span className="label block mb-1 normal-case tracking-normal text-[12px] font-sans">Questions from</span>
+              <select className="box" value={e.extraKind} onChange={(ev) => set((x) => void (x.extraKind = ev.target.value as RoundKind))}>
+                {ENCORE_KINDS.filter((k) => content.rounds.some((r) => r.kind === k)).map((k) => (
+                  <option key={k} value={k}>
+                    {content.rounds.find((r) => r.kind === k)!.title.replace("{name}", content.honoree.name)} · {KIND_LABEL[k]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="label block mb-1 normal-case tracking-normal text-[12px] font-sans">Title on screen</span>
+              <input className="box" value={e.extraTitle} onChange={(ev) => set((x) => void (x.extraTitle = ev.target.value))} />
+            </label>
+            <Num label="Questions" value={e.extraCount} onChange={(v) => set((x) => void (x.extraCount = Math.max(1, v)))} />
+          </div>
+        )}
+      </div>
+    </Section>
   );
 }
 
