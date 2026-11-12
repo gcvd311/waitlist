@@ -5,6 +5,8 @@ import { getContent, hasSupabase, mergeContent, resolvePhotos, saveContent, unre
 import type { Content } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+export const revalidate = 0;
 
 // Content includes the answers, so it is admin-only.
 export async function GET() {

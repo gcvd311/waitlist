@@ -3,6 +3,8 @@ import { body, fail, ok } from "@/lib/http";
 import { GameError } from "@/lib/engine";
 
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+export const revalidate = 0;
 
 export async function GET() {
   return ok({ admin: isAdmin(), configured: !!adminPassword(), devDefault: !process.env.ADMIN_PASSWORD && !!adminPassword() });

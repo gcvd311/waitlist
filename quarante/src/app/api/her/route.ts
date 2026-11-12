@@ -5,6 +5,8 @@ import { getContent, mutateContent, resolvePhotos } from "@/lib/store";
 import type { Content } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+export const revalidate = 0;
 
 /** The questions she can answer in advance, without the host's answers. */
 function herQuestions(c: Content) {

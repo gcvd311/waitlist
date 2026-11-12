@@ -3,6 +3,8 @@ import { fail, ok, safeEq } from "@/lib/http";
 import { getRoom, onlineSet, resolvePhotos, touch } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+export const revalidate = 0;
 
 export async function GET(req: Request, { params }: { params: { code: string } }) {
   try {
