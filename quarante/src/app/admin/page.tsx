@@ -76,6 +76,32 @@ function Dashboard() {
     });
   }, []);
 
+  // Coming back to this tab (after editing on another device): pick up the latest saved version first,
+  // so this tab never saves an older copy over newer edits.
+  const stateRef = useRef(saveState);
+  stateRef.current = saveState;
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState !== "visible" || stateRef.current !== "saved") return;
+      api<{ content: Content; backend: string }>("/api/content")
+        .then((r) => {
+          if (stateRef.current !== "saved") return; // an edit started meanwhile: keep it
+          setContent((cur) => {
+            if (cur && cur.updatedAt === r.content.updatedAt) return cur;
+            first.current = true; // loading, not editing: don't save it back
+            return r.content;
+          });
+        })
+        .catch(() => {});
+    };
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, []);
+
   // Autosave, debounced.
   useEffect(() => {
     if (!content) return;
