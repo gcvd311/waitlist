@@ -256,7 +256,7 @@ export interface RoomView {
   teams: PublicTeam[];
   players: PublicPlayer[];
   round: { index: number; total: number; kind: RoundKind; title: string; subtitle: string; qIndex: number; qCount: number } | null;
-  roundTitles: { kind: RoundKind; title: string; count: number }[];
+  roundTitles: { kind: RoundKind; title: string; subtitle: string; count: number }[];
   question: (Omit<RoomQuestion, "answer" | "accept"> & { answer?: string | number; accept?: string[] }) | null;
   answeredIds: string[];
   eligibleIds: string[];

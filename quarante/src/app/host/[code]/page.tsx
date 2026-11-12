@@ -4,7 +4,7 @@ import Link from "next/link";
 import { hostKey, LETTERS, ROMAN, store, teamColor } from "@/lib/client";
 import { useRoom } from "@/hooks/useRoom";
 import { sfx } from "@/lib/sound";
-import { Avatar, Mascot, MuteButton, Portrait, PromptText, Sticker, TeamDot, Timer, TitleLockup, Toast, Wordmark } from "@/components/ui";
+import { Avatar, Mascot, MuteButton, Portrait, PromptText, QR, Sticker, TeamDot, Timer, TitleLockup, Toast, Wordmark } from "@/components/ui";
 import { Sparkle } from "@/components/Cat";
 import { Bars, KfmTable, Lineup, Ranking, screenGrid, revealHeadline, RevealResultList, Standings, TopPlayers, voteRows } from "@/components/game";
 import type { RoomView } from "@/lib/types";
@@ -29,6 +29,24 @@ export default function HostPage({ params }: { params: { code: string } }) {
   const { view, error, act, now, connected } = useRoom(code, auth);
   const [toast, setToast] = useState<string | null>(null);
   const [dock, setDock] = useState(true);
+  // The welcome screen comes first: explain the game in person while everyone scans in.
+  const [welcome, setWelcomeState] = useState(true);
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(`q40:welcomed:${code}`)) setWelcomeState(false);
+    } catch {}
+  }, [code]);
+  const setWelcome = useCallback(
+    (on: boolean) => {
+      setWelcomeState(on);
+      try {
+        if (on) sessionStorage.removeItem(`q40:welcomed:${code}`);
+        else sessionStorage.setItem(`q40:welcomed:${code}`, "1");
+      } catch {}
+    },
+    [code],
+  );
+  const onWelcome = !!view && view.phase === "lobby" && welcome;
   const clearToast = useCallback(() => setToast(null), []);
 
   const run = useCallback(
@@ -49,13 +67,14 @@ export default function HostPage({ params }: { params: { code: string } }) {
       if (!view) return;
       if (e.key === " " || e.key === "ArrowRight" || e.key === "Enter") {
         e.preventDefault();
-        run({ type: view.phase === "lobby" ? "start" : "next" });
+        if (view.phase === "lobby" && welcome) setWelcome(false);
+        else run({ type: view.phase === "lobby" ? "start" : "next" });
       } else if (e.key === "p") run({ type: view.paused ? "resume" : "pause" });
       else if (e.key === "h") setDock((d) => !d);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [view, run]);
+  }, [view, run, welcome, setWelcome]);
 
   if (token === null)
     return (
@@ -109,7 +128,7 @@ export default function HostPage({ params }: { params: { code: string } }) {
         </div>
         <div className="flex items-center justify-end gap-5">
           {!connected && <span className="label text-rouge anim-pulse">Offline</span>}
-          <span className="font-mono text-xl tracking-[0.25em]">{view.code}</span>
+          {view.phase !== "lobby" && <span className="font-mono text-xl tracking-[0.25em]">{view.code}</span>}
           <MuteButton />
         </div>
       </header>
@@ -118,10 +137,10 @@ export default function HostPage({ params }: { params: { code: string } }) {
         className={`flex-1 flex flex-col ${
           view.phase === "lobby" || view.phase === "round_intro" ? "px-6 lg:px-12 py-4" : "card relative mx-6 lg:mx-12 mb-5 px-8 lg:px-14 py-8"
         }`}
-        key={`${view.phase}-${view.question?.key ?? view.round?.index ?? ""}`}
+        key={`${onWelcome ? "welcome" : view.phase}-${view.question?.key ?? view.round?.index ?? ""}`}
       >
         {view.phase === "question" && view.question?.kind !== "men" && <Sticker name="bow" className="absolute -top-8 -right-6 w-28 rotate-12" />}
-        <Stage view={view} run={run} now={now} />
+        {onWelcome ? <Welcome view={view} /> : <Stage view={view} run={run} now={now} />}
       </section>
 
       {view.paused && (
@@ -135,7 +154,7 @@ export default function HostPage({ params }: { params: { code: string } }) {
 
       {view.slideshow && <Slideshow view={view} run={run} />}
 
-      {dock ? <Dock view={view} run={run} hide={() => setDock(false)} /> : (
+      {dock ? <Dock view={view} run={run} hide={() => setDock(false)} welcome={onWelcome} setWelcome={setWelcome} /> : (
         <button className="fixed bottom-3 right-3 label z-40 opacity-40 hover:opacity-100" onClick={() => setDock(true)}>
           Controls
         </button>
@@ -199,10 +218,62 @@ function Stage({ view, run, now }: { view: RoomView; run: Act | ((a: Record<stri
   }
 }
 
-function Lobby({ view, run }: { view: RoomView; run: (a: Record<string, unknown>) => void }) {
+/** Before the lobby: the host explains the game while everyone scans the code. */
+function Welcome({ view }: { view: RoomView }) {
   const [origin, setOrigin] = useState("");
-  const [menu, setMenu] = useState<string | null>(null);
   useEffect(() => setOrigin(window.location.origin), []);
+  const url = `${origin}/join/${view.code}`;
+  const rules = [
+    "Scan the code and tap your own photo.",
+    "Questions go up here. Answer on your phone.",
+    "Change your mind as often as you like until time runs out.",
+    "Scores stay sealed until the very end.",
+  ];
+  return (
+    <div className="flex-1 grid lg:grid-cols-[1.2fr_1fr] gap-12 items-center">
+      <div className="relative">
+        <Sparkle className="absolute -left-2 top-0 w-9 text-bone anim-pulse" />
+        <TitleLockup className="anim-rise !text-left" size="clamp(3rem, 5.4vw, 6rem)" />
+        <p className="font-serif italic font-bold text-[clamp(1.4rem,2.2vw,2.2rem)] mt-8 anim-rise delay-1">
+          {view.honoree.name} turns 40. We have questions.
+        </p>
+        <ol className="mt-8 space-y-3 max-w-2xl">
+          {view.roundTitles.map((t, i) => (
+            <li key={i} className="flex items-start gap-4 anim-rise" style={{ animationDelay: `${300 + i * 120}ms` }}>
+              <span className="grid place-items-center w-11 h-11 shrink-0 rounded-full bg-bone text-ink font-mono text-xl font-semibold">{i + 1}</span>
+              <span>
+                <span className="block font-mono font-semibold uppercase text-2xl leading-tight">{t.title}</span>
+                <span className="block text-bone/70 leading-snug">{t.subtitle}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+        <ul className="mt-8 grid sm:grid-cols-2 gap-x-8 gap-y-2 max-w-2xl anim-rise delay-4">
+          {rules.map((r) => (
+            <li key={r} className="flex gap-2 text-bone/80">
+              <span className="text-bone">♥</span>
+              {r}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="card relative px-8 py-8 flex flex-col items-center text-center anim-rise delay-2">
+        <p className="font-mono font-bold uppercase text-4xl">Scan to join</p>
+        <p className="label mt-1 mb-6">Camera app, point, tap the link</p>
+        {origin && <QR value={url} size={300} className="rounded-2xl" />}
+        <p className="mt-6 text-bone/60 text-sm">Or go to</p>
+        <p className="font-mono text-lg">{origin.replace(/^https?:\/\//, "")}/join</p>
+        <p className="font-mono font-bold text-5xl tracking-[0.2em] mt-1">{view.code}</p>
+        <p className="label mt-4">{view.players.length} joined</p>
+        <Sticker name="bow" className="absolute -top-8 -right-6 w-24 rotate-12" />
+        <Mascot mascots={view.mascots} pose="peekCream" className="absolute -left-10 -bottom-10 w-32" />
+      </div>
+    </div>
+  );
+}
+
+function Lobby({ view, run }: { view: RoomView; run: (a: Record<string, unknown>) => void }) {
+  const [menu, setMenu] = useState<string | null>(null);
   return (
     <div className="flex-1 grid lg:grid-cols-[1fr_1.15fr] gap-12 items-center">
       <div className="relative flex flex-col items-center text-center">
@@ -213,11 +284,6 @@ function Lobby({ view, run }: { view: RoomView; run: (a: Record<string, unknown>
         <p className="font-serif italic font-bold text-[clamp(1.4rem,2.2vw,2.2rem)] mt-5 anim-rise delay-1">
           {view.honoree.name} turns 40. We have questions.
         </p>
-        <div className="mt-8 anim-rise delay-2">
-          <p className="label text-bone/80">Open the link and enter the room code</p>
-          <p className="font-mono font-bold text-[clamp(4rem,8vw,8rem)] leading-none tracking-[0.14em] mt-2">{view.code}</p>
-          <p className="font-mono text-lg mt-3 text-bone/80">{origin.replace(/^https?:\/\//, "")}/join</p>
-        </div>
         <p className="mt-10 text-bone/50 anim-rise delay-4">
           {view.confessionCount} confession{view.confessionCount === 1 ? "" : "s"} in the vault. Players can add more from their phones while you wait.
         </p>
@@ -852,7 +918,19 @@ function Slideshow({ view, run }: { view: RoomView; run: (a: Record<string, unkn
   );
 }
 
-function Dock({ view, run, hide }: { view: RoomView; run: (a: Record<string, unknown>) => void; hide: () => void }) {
+function Dock({
+  view,
+  run,
+  hide,
+  welcome,
+  setWelcome,
+}: {
+  view: RoomView;
+  run: (a: Record<string, unknown>) => void;
+  hide: () => void;
+  welcome: boolean;
+  setWelcome: (on: boolean) => void;
+}) {
   const [more, setMore] = useState(false);
   const primary: Record<RoomView["phase"], string> = {
     lobby: "Start the game",
@@ -895,6 +973,11 @@ function Dock({ view, run, hide }: { view: RoomView; run: (a: Record<string, unk
           )}
           {view.phase === "lobby" && (
             <>
+              {!welcome && (
+                <button className="btn-ghost btn-sm" onClick={() => setWelcome(true)}>
+                  Welcome screen
+                </button>
+              )}
               <button className="btn-ghost btn-sm" onClick={() => run({ type: "shuffleTeams" })}>
                 Shuffle teams
               </button>
@@ -915,6 +998,11 @@ function Dock({ view, run, hide }: { view: RoomView; run: (a: Record<string, unk
         <button className="btn-ghost btn-sm" onClick={() => setMore(!more)}>
           {more ? "Fewer" : "More"}
         </button>
+        {view.phase === "lobby" && !welcome && (
+          <button className="btn-ghost btn-sm" onClick={() => setWelcome(true)} title="Back to the welcome screen">
+            ‹ Back
+          </button>
+        )}
         {view.phase !== "lobby" && (
           <button className="btn-ghost btn-sm" onClick={() => run({ type: "back" })} title="Go back one step">
             ‹ Back
@@ -969,9 +1057,15 @@ function Dock({ view, run, hide }: { view: RoomView; run: (a: Record<string, unk
             </button>
           </>
         ) : (
-          <button className={`btn-acid ${view.phase === "question" && view.allIn ? "ring-4 ring-acid/40 anim-pulse" : ""}`} onClick={() => run({ type: view.phase === "lobby" ? "start" : "next" })}>
-            {view.phase === "question" && view.allIn ? `Everyone’s in · ${label}` : label}
-          </button>
+          welcome ? (
+            <button className="btn-acid" onClick={() => setWelcome(false)}>
+              Open the lobby
+            </button>
+          ) : (
+            <button className={`btn-acid ${view.phase === "question" && view.allIn ? "ring-4 ring-acid/40 anim-pulse" : ""}`} onClick={() => run({ type: view.phase === "lobby" ? "start" : "next" })}>
+              {view.phase === "question" && view.allIn ? `Everyone’s in · ${label}` : label}
+            </button>
+          )
         )}
       </div>
     </div>
