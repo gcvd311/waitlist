@@ -188,7 +188,10 @@ function PlayTab({ content, setContent, saveState }: { content: Content; setCont
   const [origin, setOrigin] = useState("");
   useEffect(() => setOrigin(window.location.origin), []);
 
-  const placeholders = [...content.questions.knowHer, ...content.questions.final40].filter((q) => q.placeholder).length;
+  const her = content.honoreeAnswers ?? {};
+  const placeholders = [...content.questions.knowHer, ...content.questions.final40].filter((q) => q.placeholder && her[q.id] === undefined).length;
+  const herTotal = content.questions.honoreeVs.length + content.questions.knowHer.length + content.questions.final40.filter((q) => q.aboutHer).length;
+  const herDone = Object.keys(her).length;
   const enabled = content.rounds.filter((r) => r.enabled);
 
   async function host(preview: boolean) {
@@ -232,6 +235,8 @@ function PlayTab({ content, setContent, saveState }: { content: Content; setCont
         <ul className="divide-y divide-bone/10 border-y border-bone/10">
           <Check ok={content.honoree.name !== DEFAULT_CONTENT.honoree.name} label="Her name" detail={content.honoree.name} />
           <Check ok={content.honoree.photos.length > 0} label="Photographs" detail={`${content.honoree.photos.length} uploaded`} />
+          <Check ok={!!content.honoreePassword} label="Her password" detail={content.honoreePassword ? "Set (see the Her tab)" : "Set one in the Her tab so she can log in"} />
+          <Check ok={herDone >= herTotal && herTotal > 0} label="Her answers" detail={`${herDone} of ${herTotal} answered by her`} />
           <Check ok={placeholders === 0} label="Placeholder questions" detail={placeholders ? `${placeholders} still need her real answers` : "None left"} />
           <Check ok={content.confessions.length >= 5} label="Confessions for Who Said That?" detail={`${content.confessions.length} collected (players can add more in the lobby)`} />
           <Check ok={content.messages.length > 0} label="Messages for the final screen" detail={`${content.messages.length}`} />
@@ -320,6 +325,8 @@ function HerTab({ content, update }: { content: Content; update: Update }) {
         </div>
       </Section>
 
+      <HerLogin content={content} update={update} />
+
       <Section title="Photographs" hint="Shown on round openings and the final screen. Resized in your browser before upload.">
         <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
           {h.photos.map((p, i) => (
@@ -386,14 +393,50 @@ function HerTab({ content, update }: { content: Content; update: Update }) {
   );
 }
 
+function HerLogin({ content, update }: { content: Content; update: Update }) {
+  const [origin, setOrigin] = useState("");
+  useEffect(() => setOrigin(window.location.origin), []);
+  const n = Object.keys(content.honoreeAnswers ?? {}).length;
+  return (
+    <Section
+      title="Her login"
+      hint="She opens this link, enters the password, and answers her questions in private before the party. Her answers stay hidden from you here, so you can play too."
+    >
+      <div className="grid sm:grid-cols-2 gap-6">
+        <div>
+          <label className="label block mb-1">Her link</label>
+          <div className="flex gap-2 items-center">
+            <input readOnly className="box font-mono text-sm" value={`${origin}/her`} onFocus={(e) => e.target.select()} />
+            <button className="btn-ghost btn-sm" onClick={() => navigator.clipboard?.writeText(`${origin}/her`)}>
+              Copy
+            </button>
+          </div>
+        </div>
+        <div>
+          <label className="label block mb-1">Her password</label>
+          <input
+            className="box"
+            value={content.honoreePassword ?? ""}
+            placeholder="Something only she’ll know"
+            onChange={(e) => update((c) => void (c.honoreePassword = e.target.value))}
+          />
+        </div>
+      </div>
+      <p className="text-bone/50 text-sm mt-3">
+        {n ? `She has answered ${n} question${n === 1 ? "" : "s"} so far.` : "She hasn’t answered anything yet."}
+      </p>
+    </Section>
+  );
+}
+
 // ───────────────────────── Questions ─────────────────────────
 
 const SETS: { id: QSet | "mostLikely"; label: string; hint: string }[] = [
-  { id: "knowHer", label: "How Well Do You Know Her?", hint: "You enter her real answers here. Free-text answers are auto-marked leniently; the host can overrule on the reveal. Add a photo to make it a picture question." },
-  { id: "honoreeVs", label: "Her vs. Everyone", hint: "She answers live on her phone; everyone else predicts. Set a fallback answer only if she won’t be playing on a phone." },
+  { id: "knowHer", label: "How Well Do You Know Her?", hint: "She can give her real answers on her own page, or you can type them here. Free-text answers are auto-marked leniently; the host can overrule on the reveal. Add a photo to make it a picture question." },
+  { id: "honoreeVs", label: "Her vs. Everyone", hint: "She answers these on her own page before the party (or live on her phone if she hasn’t). Everyone else predicts." },
   { id: "final40", label: "The Final 40", hint: "Teams wager before each. Mark questions about her life so she sits those out." },
   { id: "mostLikely", label: "Most Likely To", hint: "Everyone votes for a player, anonymously." },
-  { id: "trivia", label: "Your trivia", hint: "Added to the built-in bank of 105. Yours are always used first." },
+  { id: "trivia", label: "General trivia", hint: "Every question here is editable. Each game picks a random set at the difficulty you choose." },
   { id: "tiebreakers", label: "Tie-breakers", hint: "Numeric questions. Closest answer wins it for her team." },
 ];
 
@@ -413,10 +456,24 @@ function QuestionsTab({ content, update }: { content: Content; update: Update })
         ))}
       </div>
       {set === "trivia" && (
-        <label className="flex items-center gap-3 mb-6 text-sm">
-          <input type="checkbox" className="accent-acid w-4 h-4" checked={content.useBuiltInTrivia} onChange={(e) => update((c) => void (c.useBuiltInTrivia = e.target.checked))} />
-          Use the built-in bank (105 questions: 90s &amp; 00s, music, fashion, film &amp; TV, celebrity, geography, general knowledge, food &amp; drink)
-        </label>
+        <div className="flex flex-wrap items-center gap-2 mb-6">
+          <span className="label mr-2">Each game uses</span>
+          {(
+            [
+              ["mixed", "Any difficulty"],
+              ["harder", "Medium and hard"],
+              ["hardest", "Hard only"],
+            ] as const
+          ).map(([v, l]) => (
+            <button
+              key={v}
+              onClick={() => update((c) => void (c.triviaLevel = v))}
+              className={`btn-sm border ${(content.triviaLevel ?? "mixed") === v ? "border-acid text-acid" : "border-bone/20 text-bone/60 hover:text-bone"}`}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
       )}
       {set === "mostLikely" ? <MostLikelyEditor content={content} update={update} hint={meta.hint} /> : <QuestionList set={set} content={content} update={update} title={meta.label} hint={meta.hint} />}
     </div>
@@ -458,6 +515,10 @@ function blankQuestion(set: QSet): ContentQuestion {
 function QuestionList({ set, content, update, title, hint }: { set: QSet; content: Content; update: Update; title: string; hint: string }) {
   const list = content.questions[set];
   const [open, setOpen] = useState<string | null>(null);
+  const [filter, setFilter] = useState("");
+  const her = content.honoreeAnswers ?? {};
+  const visible = (q: ContentQuestion) =>
+    !filter || `${q.prompt} ${q.category ?? ""} ${q.difficulty ?? ""} ${(q.options ?? []).join(" ")}`.toLowerCase().includes(filter.toLowerCase());
   return (
     <Section
       title={title}
@@ -475,13 +536,17 @@ function QuestionList({ set, content, update, title, hint }: { set: QSet; conten
         </button>
       }
     >
+      {list.length > 15 && (
+        <input className="box mb-4" placeholder="Search questions, categories or “hard”…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+      )}
       <ol className="border-t border-bone/10">
-        {list.map((q, i) => (
+        {list.map((q, i) => !visible(q) ? null : (
           <li key={q.id} className="border-b border-bone/10">
             <button className="w-full text-left flex items-baseline gap-4 py-3" onClick={() => setOpen(open === q.id ? null : q.id)}>
               <span className="font-mono text-xs text-bone/40 w-6">{i + 1}</span>
               <span className="flex-1 font-serif text-xl leading-snug">{q.prompt.replace(/\{name\}/g, content.honoree.name) || <em className="text-bone/30">Untitled</em>}</span>
-              {q.placeholder && <span className="label text-rouge">Placeholder</span>}
+              {her[q.id] !== undefined ? <span className="label text-acid">She answered</span> : q.placeholder && <span className="label text-rouge">Placeholder</span>}
+              {q.difficulty && <span className="label">{q.difficulty}</span>}
               {q.aboutHer && <span className="label">About her</span>}
               <span className="label">{q.type === "mc" ? "Choice" : q.type === "text" ? "Free text" : "Number"}</span>
             </button>
@@ -491,6 +556,8 @@ function QuestionList({ set, content, update, title, hint }: { set: QSet; conten
                 q={q}
                 name={content.honoree.name}
                 onChange={(fn) => update((c) => fn(c.questions[set][i]))}
+                herAnswer={her[q.id]}
+                onClearHer={() => update((c) => void delete c.honoreeAnswers[q.id])}
                 onDelete={() => confirm("Delete this question?") && update((c) => void c.questions[set].splice(i, 1))}
                 onMove={(d) =>
                   update((c) => {
@@ -517,6 +584,8 @@ function QuestionEditor({
   onChange,
   onDelete,
   onMove,
+  herAnswer,
+  onClearHer,
 }: {
   set: QSet;
   q: ContentQuestion;
@@ -524,7 +593,10 @@ function QuestionEditor({
   onChange: (fn: (q: ContentQuestion) => void) => void;
   onDelete: () => void;
   onMove: (d: number) => void;
+  herAnswer?: string | number;
+  onClearHer?: () => void;
 }) {
+  const [peek, setPeek] = useState(false);
   const types: QType[] = set === "tiebreakers" ? ["number"] : set === "honoreeVs" || set === "trivia" ? ["mc"] : ["mc", "text"];
   const ch = (fn: (q: ContentQuestion) => void) =>
     onChange((x) => {
@@ -558,6 +630,23 @@ function QuestionEditor({
         <label className="label block mb-1">Question · use {"{name}"} for {name}</label>
         <textarea className="box min-h-[64px] font-serif text-xl" value={q.prompt} onChange={(e) => ch((x) => void (x.prompt = e.target.value))} />
       </div>
+
+      {herAnswer !== undefined && (
+        <div className="border border-acid/40 px-4 py-3 text-sm flex flex-wrap items-center gap-3">
+          <span className="text-acid">She answered this herself. Her answer is used in the game.</span>
+          <span className="flex-1" />
+          {peek ? (
+            <span className="font-serif italic text-lg">{q.type === "mc" ? q.options?.[herAnswer as number] : String(herAnswer)}</span>
+          ) : (
+            <button className="label hover:text-bone" onClick={() => setPeek(true)}>
+              Show (spoiler)
+            </button>
+          )}
+          <button className="label hover:text-rouge" onClick={() => confirm("Clear her answer?") && onClearHer?.()}>
+            Clear
+          </button>
+        </div>
+      )}
 
       {q.type === "mc" && (
         <div>

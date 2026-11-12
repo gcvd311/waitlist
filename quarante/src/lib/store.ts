@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { DEFAULT_CONTENT } from "./defaultContent";
+import { TRIVIA_BANK } from "./triviaBank";
 import { GameError, ONLINE_WINDOW_MS } from "./engine";
 import type { Content, RoomState } from "./types";
 
@@ -45,7 +46,7 @@ export function newCode(): string {
 export function mergeContent(raw: Partial<Content> | null | undefined): Content {
   const d = structuredClone(DEFAULT_CONTENT);
   if (!raw) return d;
-  return {
+  const merged: Content = {
     ...d,
     ...raw,
     honoree: { ...d.honoree, ...(raw.honoree ?? {}) },
@@ -53,7 +54,14 @@ export function mergeContent(raw: Partial<Content> | null | undefined): Content 
     questions: { ...d.questions, ...(raw.questions ?? {}) },
     rounds: raw.rounds?.length ? raw.rounds : d.rounds,
     teams: raw.teams?.length ? raw.teams : d.teams,
+    honoreeAnswers: raw.honoreeAnswers ?? {},
   };
+  // Older saves kept the starter trivia outside the content; fold it in so every question is editable.
+  if (!raw.triviaSeeded) {
+    merged.questions.trivia = [...(raw.questions?.trivia ?? []), ...(raw.useBuiltInTrivia === false ? [] : TRIVIA_BANK.map((q) => ({ ...q })))];
+    merged.triviaSeeded = true;
+  }
+  return merged;
 }
 
 export async function getContent(): Promise<Content> {

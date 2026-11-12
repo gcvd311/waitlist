@@ -1,4 +1,3 @@
-import { TRIVIA_BANK } from "./triviaBank";
 import type {
   Answer,
   Content,
@@ -140,7 +139,18 @@ function shuffleOptions(q: ContentQuestion): { options: string[]; answer?: numbe
   return { options: order.map((i) => options[i]), answer: order.indexOf(q.answer) };
 }
 
-function toRoomQ(q: ContentQuestion, round: RoomRound, key: string, name: string, shuffleOpts: boolean): RoomQuestion {
+function toRoomQ(
+  q0: ContentQuestion,
+  round: RoomRound,
+  key: string,
+  name: string,
+  shuffleOpts: boolean,
+  herAnswers: Record<string, string | number> = {},
+): RoomQuestion {
+  // An answer she gave in advance on her own page beats whatever the host typed.
+  const her = herAnswers[q0.id];
+  const hasHer = her !== undefined && her !== "";
+  const q: ContentQuestion = hasHer ? { ...q0, answer: her, placeholder: false } : q0;
   const { options, answer } = shuffleOpts ? shuffleOptions(q) : { options: q.options ?? [], answer: q.answer };
   return {
     key,
@@ -176,18 +186,22 @@ export function buildRound(state: RoomState, index: number): RoomQuestion[] {
   const key = (j: number) => `r${index}q${j}.${nonce}`;
   const players = Object.values(state.players).sort((a, b) => a.joinedAt - b.joinedAt);
 
+  const her = c.honoreeAnswers ?? {};
   switch (round.kind) {
     case "knowHer":
-      return c.questions.knowHer.filter(usable).slice(0, round.count).map((q, j) => toRoomQ(q, round, key(j), name, false));
+      return c.questions.knowHer.filter(usable).slice(0, round.count).map((q, j) => toRoomQ(q, round, key(j), name, false, her));
     case "honoreeVs":
-      return c.questions.honoreeVs.filter(usable).slice(0, round.count).map((q, j) => toRoomQ(q, round, key(j), name, false));
+      return c.questions.honoreeVs.filter(usable).slice(0, round.count).map((q, j) => toRoomQ(q, round, key(j), name, false, her));
     case "final40":
-      return c.questions.final40.filter(usable).slice(0, round.count).map((q, j) => toRoomQ(q, round, key(j), name, true));
+      return c.questions.final40.filter(usable).slice(0, round.count).map((q, j) => toRoomQ(q, round, key(j), name, true, her));
     case "trivia": {
-      const pool = [...c.questions.trivia.filter(usable), ...(c.useBuiltInTrivia ? TRIVIA_BANK : [])];
-      const custom = shuffle(c.questions.trivia.filter(usable));
-      const rest = shuffle(pool.filter((q) => !custom.includes(q)));
-      const picked = [...custom, ...rest].slice(0, round.count);
+      const all = c.questions.trivia.filter(usable);
+      const level = c.triviaLevel ?? "mixed";
+      const ok = (q: ContentQuestion) =>
+        level === "hardest" ? q.difficulty === "hard" : level === "harder" ? q.difficulty !== "easy" : true;
+      let pool = shuffle(all.filter(ok));
+      if (pool.length < round.count) pool = [...pool, ...shuffle(all.filter((q) => !ok(q)))];
+      const picked = pool.slice(0, round.count);
       picked.sort((a, b) => DIFF_ORDER[a.difficulty ?? "medium"] - DIFF_ORDER[b.difficulty ?? "medium"]);
       return picked.map((q, j) => toRoomQ(q, round, key(j), name, true));
     }
@@ -479,6 +493,13 @@ export function applyPlayerAction(state: RoomState, pid: string, action: PlayerA
   const p = state.players[pid];
   if (!p) throw new GameError("You’re no longer in this room. Rejoin with your name.", 401);
 
+  if (action.type === "photo") {
+    const photo = String(action.photo ?? "");
+    if (photo && !/^(https:\/\/|data:image\/)/.test(photo)) throw new GameError("That photo didn’t upload. Try another.");
+    p.photo = photo || undefined;
+    return;
+  }
+
   if (action.type === "confess") {
     const text = String(action.text ?? "").replace(/\s+/g, " ").trim();
     if (text.length < 3) throw new GameError("A little more than that.");
@@ -520,6 +541,7 @@ export function applyPlayerAction(state: RoomState, pid: string, action: PlayerA
   const frac = state.deadline && q.timerSec ? Math.max(0, Math.min(1, (state.deadline - now) / (q.timerSec * 1000))) : 1;
 
   if (q.kind === "honoreeVs" && p.isHonoree) {
+    if (q.answer !== undefined) return "Already answered in advance.";
     if (state.honoreeAnswers[q.key] === undefined) state.honoreeAnswers[q.key] = value;
   } else {
     if (!isEligible(q, p)) throw new GameError("You sit this one out.", 403);
@@ -540,7 +562,7 @@ export function everyoneAnswered(state: RoomState): boolean {
   if (!eligible.length) return false;
   const answers = state.answers[q.key] ?? {};
   if (!eligible.every((p) => answers[p.id])) return false;
-  if (q.kind === "honoreeVs" && players.some((p) => p.isHonoree) && state.honoreeAnswers[q.key] === undefined) return false;
+  if (q.kind === "honoreeVs" && q.answer === undefined && players.some((p) => p.isHonoree) && state.honoreeAnswers[q.key] === undefined) return false;
   return true;
 }
 
@@ -751,7 +773,7 @@ export function buildView(
   const name = c.honoree.name;
   const players: PublicPlayer[] = Object.values(state.players)
     .sort((a, b) => a.joinedAt - b.joinedAt)
-    .map((p) => ({ id: p.id, name: p.name, team: p.team, isHonoree: p.isHonoree, online: online.has(p.id), score: playerScore(state, p.id) }));
+    .map((p) => ({ id: p.id, name: p.name, team: p.team, isHonoree: p.isHonoree, online: online.has(p.id), score: playerScore(state, p.id), photo: p.photo }));
   const q = state.current;
   const wagers = q ? state.wagers[q.key] : undefined;
   const teams: PublicTeam[] = c.teams.map((t) => ({ id: t.id, name: t.name, score: teamScore(state, t.id), wager: wagers?.[t.id] ?? null, maxWager: maxWager(state, t.id) }));
@@ -770,7 +792,9 @@ export function buildView(
   let meView: RoomView["me"] = null;
   if (me) {
     const eligible = q ? isEligible(q, me) : true;
-    const isHerTurn = !!q && q.kind === "honoreeVs" && me.isHonoree;
+    const herVs = !!q && q.kind === "honoreeVs" && me.isHonoree;
+    const presubmitted = herVs && q!.answer !== undefined;
+    const isHerTurn = herVs && !presubmitted;
     meView = {
       id: me.id,
       name: me.name,
@@ -778,7 +802,8 @@ export function buildView(
       isHonoree: me.isHonoree,
       answer: q ? (isHerTurn ? state.honoreeAnswers[q.key] ?? null : answers[me.id]?.value ?? null) : null,
       eligible: eligible || isHerTurn,
-      role: isHerTurn ? "honoree" : eligible ? "guess" : "sitout",
+      role: presubmitted ? "presubmitted" : isHerTurn ? "honoree" : eligible ? "guess" : "sitout",
+      photo: me.photo,
     };
   }
 
@@ -822,7 +847,7 @@ export function buildView(
   };
   if (isHost && q) {
     view.hostAnswers = Object.fromEntries(Object.entries(answers).map(([pid, a]) => [pid, a.value]));
-    view.honoreeAnswered = state.honoreeAnswers[q.key] !== undefined;
+    view.honoreeAnswered = state.honoreeAnswers[q.key] !== undefined || (q.kind === "honoreeVs" && q.answer !== undefined);
     view.placeholderWarning = !!q.placeholder;
   }
   return view;

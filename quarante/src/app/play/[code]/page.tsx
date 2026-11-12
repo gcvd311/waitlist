@@ -1,10 +1,10 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { hostKey, playerKey, ROMAN, store, teamColor, type PlayerCreds } from "@/lib/client";
+import { hostKey, playerKey, ROMAN, squarePhoto, store, teamColor, type PlayerCreds } from "@/lib/client";
 import { useRoom } from "@/hooks/useRoom";
 import { sfx } from "@/lib/sound";
-import { MuteButton, TeamDot, Timer, Toast } from "@/components/ui";
+import { Avatar, MuteButton, PhotoPicker, Timer, Toast } from "@/components/ui";
 import { Bars, OptionLetter, revealHeadline, Standings, voteRows } from "@/components/game";
 import HostRemote from "@/components/HostRemote";
 import type { RoomView } from "@/lib/types";
@@ -64,7 +64,7 @@ export default function PlayPage({ params }: { params: { code: string } }) {
     <Shell>
       <header className="flex items-center justify-between gap-3 pb-4">
         <div className="flex items-center gap-2.5 min-w-0">
-          <TeamDot color={teamColor(view.teams, me.team)} />
+          <Avatar photo={me.photo} name={me.name} size={28} ring={teamColor(view.teams, me.team)} />
           <span className="truncate">{me.name}</span>
           {me.isHonoree && <span className="label text-acid">Guest of honour</span>}
         </div>
@@ -174,6 +174,16 @@ function Lobby({ view, act, setToast, teamName }: { view: RoomView; act: ActFn; 
   return (
     <div className="flex-1 flex flex-col gap-12 pt-6">
       <section>
+        <div className="mb-8 anim-rise">
+          <PhotoPicker
+            photo={view.me!.photo}
+            name={view.me!.name}
+            onPick={async (f) => {
+              const r = await act({ type: "photo", photo: await squarePhoto(f) });
+              if (!r.ok && r.message) setToast(r.message);
+            }}
+          />
+        </div>
         <p className="label mb-3 anim-rise">You’re in</p>
         <h1 className="display text-6xl anim-rise delay-1">
           <span className="italic">Team</span> {teamName}
@@ -292,6 +302,18 @@ function Question({ view, act, now, setToast }: { view: RoomView; act: ActFn; no
       <Timer deadline={view.deadline} total={q.timerSec} now={now} paused={view.paused} pausedRemaining={view.pausedRemaining} ticks />
     </>
   );
+
+  if (me.role === "presubmitted")
+    return (
+      <div className="flex-1 flex flex-col">
+        {header}
+        <div className="flex-1 flex flex-col justify-center">
+          <h1 className="display text-4xl mb-6 text-bone/50">{q.prompt}</h1>
+          <p className="display text-5xl italic">Your answer is already sealed.</p>
+          <p className="mt-4 text-bone/55">You gave it in advance. Watch them try to read your mind.</p>
+        </div>
+      </div>
+    );
 
   if (me.role === "sitout")
     return (

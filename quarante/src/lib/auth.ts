@@ -43,3 +43,29 @@ export function isAdmin(): boolean {
   const expected = sign(exp);
   return sig.length === expected.length && timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
 }
+
+// ── The birthday girl's own login (password set by the host in the admin)
+const HER = "q40_her";
+
+export function checkHerPassword(attempt: string, actual: string): boolean {
+  if (!actual) return false;
+  const a = Buffer.from(sign("her:" + attempt.trim().toLowerCase()));
+  const b = Buffer.from(sign("her:" + actual.trim().toLowerCase()));
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** The cookie is bound to the current password, so changing it signs her out. */
+export function setHerCookie(password: string) {
+  const exp = Date.now() + MAX_AGE * 1000;
+  cookies().set(HER, `${exp}.${sign(`her:${exp}:${password}`)}`, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", maxAge: MAX_AGE, path: "/" });
+}
+
+export function isHer(password: string): boolean {
+  if (!password) return false;
+  const raw = cookies().get(HER)?.value;
+  if (!raw) return false;
+  const [exp, sig] = raw.split(".");
+  if (!exp || !sig || Number(exp) < Date.now()) return false;
+  const expected = sign(`her:${exp}:${password}`);
+  return sig.length === expected.length && timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
+}

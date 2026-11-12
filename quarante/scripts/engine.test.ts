@@ -144,3 +144,40 @@ ok(textMatches("Bookshp", "Bookshop"), "typo tolerated");
 ok(!textMatches("bank", "Bookshop"), "wrong text rejected");
 
 console.log(`engine: ${pass} checks passed`);
+
+// Her answers given in advance: used as the answer, she isn't waited for
+{
+  const c5 = structuredClone(content);
+  const hv = c5.questions.honoreeVs[0];
+  const kh = c5.questions.knowHer[0];
+  c5.honoreeAnswers = { [hv.id]: 2, [kh.id]: "Florist" };
+  c5.rounds = c5.rounds.map((r) => ({ ...r, enabled: r.kind === "honoreeVs" || r.kind === "knowHer" }));
+  const s5 = createRoomState("HER", c5, now());
+  const her = joinRoom(s5, "Her", { now: now(), isOnline: () => true, honoree: true });
+  const g1 = joinRoom(s5, "G1", { now: now(), isOnline: () => true });
+  applyHostAction(s5, { type: "start" }, now());
+  applyHostAction(s5, { type: "next" }, now());
+  ok(s5.current!.answer === "Florist" && !s5.current!.placeholder, "her text answer replaces the placeholder");
+  applyPlayerAction(s5, g1.id, { type: "answer", key: s5.current!.key, value: "a florist" }, now());
+  ok(phase(s5) === "reveal" && (s5.awards[s5.current!.key][g1.id] ?? 0) > 0, "guess matched her answer");
+  applyHostAction(s5, { type: "skipRound" }, now());
+  applyHostAction(s5, { type: "next" }, now());
+  const q5 = s5.current!;
+  ok(q5.kind === "honoreeVs" && q5.options[q5.answer as number] === hv.options![2], "her pick survives option shuffling");
+  ok(buildView(s5, { role: "player", pid: her.id }, now(), new Set()).me!.role === "presubmitted", "she sees her answer is sealed");
+  applyPlayerAction(s5, g1.id, { type: "answer", key: q5.key, value: q5.answer as number }, now());
+  ok(phase(s5) === "reveal", "no waiting for her live answer");
+}
+
+// Trivia difficulty
+{
+  const c6 = structuredClone(content);
+  c6.triviaLevel = "hardest";
+  c6.rounds = c6.rounds.map((r) => ({ ...r, enabled: r.kind === "trivia" }));
+  const s6 = createRoomState("HARD", c6, now());
+  joinRoom(s6, "Z", { now: now(), isOnline: () => true });
+  applyHostAction(s6, { type: "start" }, now());
+  ok(s6.rounds[0].questions.every((q) => q.difficulty === "hard"), "hardest level picks only hard questions");
+  ok(content.questions.trivia.length >= 100, "trivia is part of the editable content");
+}
+console.log(`engine (incl. advance answers): ${pass} checks passed`);

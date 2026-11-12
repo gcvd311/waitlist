@@ -1,16 +1,17 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, playerKey, store, type PlayerCreds } from "@/lib/client";
-import { Wordmark } from "@/components/ui";
+import { api, playerKey, squarePhoto, store, type PlayerCreds } from "@/lib/client";
+import { PhotoPicker, Wordmark } from "@/components/ui";
 import { sfx } from "@/lib/sound";
 import Link from "next/link";
 
 export default function JoinForm({ initialCode = "" }: { initialCode?: string }) {
   const router = useRouter();
-  const [code, setCode] = useState(initialCode.toUpperCase());
+  const [code, setCode] = useState(initialCode.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4));
   const [name, setName] = useState("");
   const [honoree, setHonoree] = useState(false);
+  const [photo, setPhoto] = useState<string | undefined>(undefined);
   const [peek, setPeek] = useState<{ honoree: string; players: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -44,7 +45,7 @@ export default function JoinForm({ initialCode = "" }: { initialCode?: string })
     try {
       const res = await api<{ pid: string; secret: string }>(`/api/rooms/${code}/join`, {
         method: "POST",
-        body: JSON.stringify({ name, honoree }),
+        body: JSON.stringify({ name, honoree, photo }),
       });
       store.set(playerKey(code), { pid: res.pid, secret: res.secret, name } satisfies PlayerCreds);
       store.set("q40:lastName", name);
@@ -99,6 +100,10 @@ export default function JoinForm({ initialCode = "" }: { initialCode?: string })
             placeholder="As your friends say it"
             autoComplete="given-name"
           />
+        </div>
+
+        <div className="anim-rise delay-2">
+          <PhotoPicker photo={photo} name={name} onPick={async (f) => setPhoto(await squarePhoto(f))} />
         </div>
 
         <label className="flex items-start gap-3 text-sm text-bone/70 anim-rise delay-2 cursor-pointer">

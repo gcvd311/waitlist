@@ -25,6 +25,7 @@ npm run dev            # http://localhost:3000
 | `/play/ABCD` | players | The phone controller. Survives refresh and dropped connections |
 | `/host/ABCD` | host | The shared screen: lobby with QR, questions, reveals, leaderboards, finale |
 | `/admin` | host | Content, rounds, scoring, photos, confessions, messages, start or preview a game |
+| `/her` | the birthday girl | Her own login (password set in the admin). She answers her questions privately before the party |
 | `/confess` | friends, before the trip | Send confessions and a message for her |
 | `/solo` | host | Pass & play on one phone, no network needed after loading |
 
@@ -54,7 +55,7 @@ Supabase is required on Vercel: serverless functions don’t share memory, so th
 ## On the night
 
 1. Put `/host/CODE` on a TV or laptop. If you started the game on your phone, *More → Copy host link* opens the host screen on another device.
-2. Everyone scans the QR code and enters their name. The birthday girl ticks “I’m the birthday girl” (or the host taps her name in the lobby).
+2. Everyone scans the QR code, enters their name and can add a photo (it opens the front camera). The birthday girl ticks “I’m the birthday girl” (or the host taps her name in the lobby).
 3. While people arrive, they can type confessions on their phones for **Who Said That?**
 4. The host drives with the big button (or Space / →). `P` pauses, `H` hides the controls.
 5. Reveals happen on their own when the timer ends or everyone has answered. For free-text answers, tap a player’s **Right / Wrong** to overrule the auto-marking.
@@ -77,4 +78,6 @@ If you are hosting and playing at once: join on your phone too. Because your pho
 
 All birthday-girl content ships as **placeholders** marked in the admin (“Placeholder”, “To do” on the Play tab). Nothing about her is invented. Placeholder free-text questions reveal as “Answer not entered yet” so you notice in preview.
 
-The 105 built-in trivia questions lean towards the 90s and 2000s: music, fashion, film and TV, celebrity, geography, general knowledge, food and drink. Your own trivia is always used first.
+Before the party, give her the `/her` link and the password from *Admin → Her*. Whatever she answers there becomes the real answer for How Well Do You Know Her?, Her vs. Everyone and the Final 40 questions about her. The admin marks those questions “She answered” and hides her answer behind a spoiler button, so the host can play too.
+
+The 110 starter trivia questions (medium and hard only) lean towards the 90s and 2000s: music, fashion, film and TV, celebrity, geography, general knowledge, food and drink. All of them are editable in *Admin → Questions → General trivia*, and you choose the difficulty each game uses.

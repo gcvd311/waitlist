@@ -43,7 +43,11 @@ export interface Content {
     mostLikely: { id: string; prompt: string }[];
     tiebreakers: ContentQuestion[];
   };
-  useBuiltInTrivia: boolean;
+  useBuiltInTrivia: boolean; // legacy; the bank now lives in questions.trivia
+  triviaSeeded?: boolean;
+  triviaLevel: "mixed" | "harder" | "hardest";
+  honoreePassword: string; // her own login at /her
+  honoreeAnswers: Record<string, string | number>; // answers she gave in advance, by question id
   confessions: { id: string; author: string; text: string }[];
   messages: { id: string; from: string; text: string }[];
   updatedAt: number;
@@ -58,6 +62,7 @@ export interface Player {
   team: string;
   isHonoree: boolean;
   joinedAt: number;
+  photo?: string;
 }
 
 export interface RoomQuestion {
@@ -132,6 +137,7 @@ export interface PublicPlayer {
   isHonoree: boolean;
   online: boolean;
   score: number;
+  photo?: string;
 }
 
 export interface PublicTeam {
@@ -178,7 +184,8 @@ export interface RoomView {
     isHonoree: boolean;
     answer: string | number | null;
     eligible: boolean;
-    role: "guess" | "honoree" | "sitout";
+    role: "guess" | "honoree" | "sitout" | "presubmitted";
+    photo?: string;
   } | null;
   confessionCount: number;
   myConfessions: number;
@@ -214,4 +221,5 @@ export type HostAction =
 export type PlayerAction =
   | { type: "answer"; key: string; value: string | number }
   | { type: "wager"; key: string; amount: number }
-  | { type: "confess"; text: string };
+  | { type: "confess"; text: string }
+  | { type: "photo"; photo: string };

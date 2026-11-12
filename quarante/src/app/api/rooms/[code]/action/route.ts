@@ -1,6 +1,6 @@
 import { ANSWER_GRACE_MS, applyHostAction, applyPlayerAction, applyTimeout, buildView, GameError } from "@/lib/engine";
 import { body, fail, ok, safeEq } from "@/lib/http";
-import { getRoom, mutateRoom, onlineSet, touch } from "@/lib/store";
+import { getRoom, mutateRoom, onlineSet, touch, uploadPhoto } from "@/lib/store";
 import type { HostAction, PlayerAction } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +33,11 @@ export async function POST(req: Request, { params }: { params: { code: string } 
     const { pid, secret } = b.auth;
     const p = room.state.players[pid];
     if (!p || !safeEq(String(secret), p.secret)) throw new GameError("You’re no longer in this room.", 401);
-    const action = b.action as PlayerAction | { type: "timeout" };
+    let action = b.action as PlayerAction | { type: "timeout" };
+    if (action.type === "photo" && action.photo?.startsWith("data:")) {
+      if (action.photo.length > 400_000) throw new GameError("That photo is too large.");
+      action = { type: "photo", photo: await uploadPhoto(action.photo) };
+    }
     if (noop) return ok({ view: buildView(room.state, { role: "player", pid }, Date.now(), await onlineSet(params.code)) });
     const { state, result } = await mutateRoom(params.code, (s) =>
       action.type === "timeout" ? (applyTimeout(s, Date.now()), undefined) : applyPlayerAction(s, pid, action, Date.now()),

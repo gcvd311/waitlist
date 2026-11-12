@@ -22,7 +22,10 @@ export default function Home() {
 
       <nav className="space-y-3 anim-rise delay-3">
         <Link href="/join" className="btn-acid w-full text-lg py-5">
-          Join a game
+          Join the game
+        </Link>
+        <Link href="/her" className="btn-ghost w-full py-4">
+          I’m the birthday girl
         </Link>
         <div className="grid grid-cols-2 gap-3">
           <Link href="/admin" className="btn-ghost">

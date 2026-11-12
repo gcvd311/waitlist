@@ -126,3 +126,41 @@ export function Toast({ message, onDone }: { message: string | null; onDone: () 
     </div>
   );
 }
+
+export function Avatar({ photo, name, size = 32, ring, className = "" }: { photo?: string; name: string; size?: number; ring?: string; className?: string }) {
+  return (
+    <span
+      className={`inline-grid place-items-center shrink-0 rounded-full overflow-hidden bg-claret text-bone/80 font-serif italic ${className}`}
+      style={{ width: size, height: size, fontSize: size * 0.48, boxShadow: ring ? `0 0 0 2px ${ring}` : undefined }}
+      aria-hidden
+    >
+      {photo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={photo} alt="" className="w-full h-full object-cover" />
+      ) : (
+        name.trim().charAt(0).toUpperCase()
+      )}
+    </span>
+  );
+}
+
+/** A round "add your photo" control. Opens the front camera on phones. */
+export function PhotoPicker({ photo, name, onPick, size = 88 }: { photo?: string; name: string; onPick: (file: File) => void; size?: number }) {
+  return (
+    <label className="inline-flex items-center gap-4 cursor-pointer group">
+      <Avatar photo={photo} name={name || "?"} size={size} className="group-hover:opacity-80 transition" />
+      <span className="text-sm text-bone/60 group-hover:text-bone">{photo ? "Change photo" : "Add your photo"}</span>
+      <input
+        type="file"
+        accept="image/*"
+        capture="user"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) onPick(f);
+          e.target.value = "";
+        }}
+      />
+    </label>
+  );
+}

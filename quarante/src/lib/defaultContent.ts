@@ -1,3 +1,4 @@
+import { TRIVIA_BANK } from "./triviaBank";
 import type { Content, ContentQuestion } from "./types";
 
 // Everything about the birthday girl is a PLACEHOLDER until edited in /admin.
@@ -42,6 +43,10 @@ export const DEFAULT_CONTENT: Content = {
   ],
   scoring: { speedBonus: 50, surpriseMultiplier: 2, mostLikelyConsensus: 50, wagerFloor: 200 },
   useBuiltInTrivia: true,
+  triviaSeeded: true,
+  triviaLevel: "harder",
+  honoreePassword: "",
+  honoreeAnswers: {},
   questions: {
     knowHer: [
       ph("kh-1", "What was {name}’s first job?"),
@@ -77,7 +82,7 @@ export const DEFAULT_CONTENT: Content = {
       ph("f-9", "What city did {name} turn thirty in?", { aboutHer: true, category: "Her life" }),
       ph("f-10", "Finish the sentence {name} says most: “Honestly, …”", { aboutHer: true, category: "Her life" }),
     ],
-    trivia: [],
+    trivia: TRIVIA_BANK.map((q) => ({ ...q })),
     mostLikely: [
       "marry for money",
       "survive longest on a deserted island",

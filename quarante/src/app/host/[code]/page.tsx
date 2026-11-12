@@ -4,7 +4,7 @@ import Link from "next/link";
 import { hostKey, LETTERS, ROMAN, store, teamColor } from "@/lib/client";
 import { useRoom } from "@/hooks/useRoom";
 import { sfx } from "@/lib/sound";
-import { MuteButton, PromptText, QR, TeamDot, Timer, Toast, Wordmark } from "@/components/ui";
+import { Avatar, MuteButton, PromptText, QR, TeamDot, Timer, Toast, Wordmark } from "@/components/ui";
 import { Bars, revealHeadline, RevealResultList, Standings, TopPlayers, voteRows } from "@/components/game";
 import type { RoomView } from "@/lib/types";
 
@@ -205,7 +205,8 @@ function Lobby({ view, run }: { view: RoomView; run: (a: Record<string, unknown>
                 {members.map((p) => (
                   <li key={p.id} className="relative anim-rise">
                     <button className="w-full text-left flex items-center justify-between py-2 border-b border-bone/10 hover:border-bone/40" onClick={() => setMenu(menu === p.id ? null : p.id)}>
-                      <span className={`text-xl ${p.online ? "" : "text-bone/35"}`}>
+                      <span className={`text-xl flex items-center gap-3 ${p.online ? "" : "text-bone/35"}`}>
+                        <Avatar photo={p.photo} name={p.name} size={34} />
                         {p.name}
                         {p.isHonoree && <span className="label text-acid ml-3">Birthday</span>}
                       </span>
@@ -299,8 +300,8 @@ function AnswerTally({ view }: { view: RoomView }) {
       {eligible.map((p) => {
         const done = view.answeredIds.includes(p.id);
         return (
-          <span key={p.id} className={`text-sm transition ${done ? "text-bone" : "text-bone/30"} ${p.online ? "" : "line-through"}`}>
-            <span className={`inline-block w-1.5 h-1.5 rounded-full mr-2 align-middle ${done ? "bg-acid" : "bg-bone/20"}`} />
+          <span key={p.id} className={`text-sm transition flex items-center gap-2 ${done ? "text-bone" : "text-bone/30"} ${p.online ? "" : "line-through"}`}>
+            <Avatar photo={p.photo} name={p.name} size={26} ring={done ? "#D6DE5B" : undefined} className={done ? "" : "opacity-40"} />
             {p.name}
           </span>
         );
@@ -396,7 +397,7 @@ function RevealStage({ view, run }: { view: RoomView; run: (a: Record<string, un
       {(q.type === "text" || q.type === "number") && (
         <div>
           <p className="label mb-3">{q.type === "text" ? "Tap to overrule the marking" : "Their guesses"}</p>
-          <RevealResultList reveal={r} teams={view.teams} onMark={q.type === "text" ? (pid, correct) => run({ type: "mark", playerId: pid, correct }) : undefined} />
+          <RevealResultList reveal={r} teams={view.teams} players={view.players} onMark={q.type === "text" ? (pid, correct) => run({ type: "mark", playerId: pid, correct }) : undefined} />
         </div>
       )}
 

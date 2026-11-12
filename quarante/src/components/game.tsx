@@ -1,7 +1,7 @@
 "use client";
 import { LETTERS, teamColor } from "@/lib/client";
 import type { PublicPlayer, PublicTeam, RevealData, RoomView } from "@/lib/types";
-import { TeamDot } from "./ui";
+import { Avatar, TeamDot } from "./ui";
 
 /** Animated horizontal bars: options with vote counts. Used for Most Likely and answer spreads. */
 export function Bars({
@@ -9,7 +9,7 @@ export function Bars({
   highlight,
   large = false,
 }: {
-  rows: { label: string; count: number; sub?: string }[];
+  rows: { label: string; count: number; sub?: string; photo?: string; withAvatar?: boolean }[];
   highlight: (i: number) => boolean;
   large?: boolean;
 }) {
@@ -19,7 +19,8 @@ export function Bars({
       {rows.map((r, i) => (
         <li key={i} className="anim-rise" style={{ animationDelay: `${i * 70}ms` }}>
           <div className="flex justify-between items-baseline mb-1.5 gap-4">
-            <span className={`${large ? "text-2xl lg:text-3xl font-serif" : "text-[15px]"} ${highlight(i) ? "text-bone" : "text-bone/50"}`}>
+            <span className={`flex items-center gap-3 ${large ? "text-2xl lg:text-3xl font-serif" : "text-[15px]"} ${highlight(i) ? "text-bone" : "text-bone/50"}`}>
+              {r.withAvatar && <Avatar photo={r.photo} name={r.label} size={large ? 44 : 26} />}
               {r.label}
             </span>
             <span className={`font-mono tabular-nums ${large ? "text-xl" : "text-sm"} ${highlight(i) ? "text-acid" : "text-bone/40"}`}>{r.count}</span>
@@ -40,7 +41,13 @@ export function voteRows(view: RoomView) {
   const q = view.question!;
   const r = view.reveal!;
   return q.options
-    .map((label, i) => ({ label, count: r.distribution[i] ?? 0, i }))
+    .map((label, i) => ({
+      label,
+      count: r.distribution[i] ?? 0,
+      i,
+      withAvatar: true,
+      photo: view.players.find((p) => p.id === q.optionIds?.[i])?.photo,
+    }))
     .filter((x) => x.count > 0)
     .sort((a, b) => b.count - a.count);
 }
@@ -79,7 +86,7 @@ export function TopPlayers({ players, teams, limit = 5 }: { players: PublicPlaye
         <li key={p.id} className="flex items-center justify-between py-2.5 anim-rise" style={{ animationDelay: `${400 + i * 70}ms` }}>
           <span className="flex items-center gap-3">
             <span className="font-mono text-xs text-bone/40 w-4">{i + 1}</span>
-            <TeamDot color={teamColor(teams, p.team)} />
+            <Avatar photo={p.photo} name={p.name} size={30} ring={teamColor(teams, p.team)} />
             <span>{p.name}</span>
           </span>
           <span className="font-mono tabular-nums text-bone/70">{p.score}</span>
@@ -111,10 +118,12 @@ export function revealHeadline(view: RoomView): string {
 export function RevealResultList({
   reveal,
   teams,
+  players = [],
   onMark,
 }: {
   reveal: RevealData;
   teams: PublicTeam[];
+  players?: PublicPlayer[];
   onMark?: (pid: string, correct: boolean) => void;
 }) {
   return (
@@ -122,7 +131,7 @@ export function RevealResultList({
       {reveal.results.map((r, i) => (
         <li key={r.playerId} className="flex items-center justify-between gap-3 py-2 border-b border-bone/10 anim-rise" style={{ animationDelay: `${i * 40}ms` }}>
           <span className="flex items-center gap-2.5 min-w-0">
-            <TeamDot color={teamColor(teams, r.team)} />
+            <Avatar photo={players.find((p) => p.id === r.playerId)?.photo} name={r.name} size={26} ring={teamColor(teams, r.team)} />
             <span className="shrink-0">{r.name}</span>
             <span className={`truncate font-serif italic text-lg ${r.correct ? "text-acid" : "text-bone/45"}`}>{r.display || "no answer"}</span>
           </span>
