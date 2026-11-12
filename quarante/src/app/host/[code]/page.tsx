@@ -223,51 +223,37 @@ function Welcome({ view }: { view: RoomView }) {
   const [origin, setOrigin] = useState("");
   useEffect(() => setOrigin(window.location.origin), []);
   const url = `${origin}/join/${view.code}`;
-  const rules = [
-    "Scan the code and tap your own photo.",
-    "Questions go up here. Answer on your phone.",
-    "Change your mind as often as you like until time runs out.",
-    "Scores stay sealed until the very end.",
-  ];
   return (
-    <div className="flex-1 grid lg:grid-cols-[1.2fr_1fr] gap-12 items-center">
-      <div className="relative">
-        <Sparkle className="absolute -left-2 top-0 w-9 text-bone anim-pulse" />
-        <TitleLockup className="anim-rise !text-left" size="clamp(3rem, 5.4vw, 6rem)" />
-        <p className="font-serif italic font-bold text-[clamp(1.4rem,2.2vw,2.2rem)] mt-8 anim-rise delay-1">
-          {view.honoree.name} turns 40. We have questions.
+    <div className="flex-1 grid lg:grid-cols-[1.3fr_1fr] gap-12 items-center">
+      <Hero view={view} />
+      <div className="card relative justify-self-center px-10 py-8 flex flex-col items-center text-center anim-rise delay-2">
+        <p className="font-mono font-bold uppercase text-3xl">Scan to join</p>
+        <p className="label mt-1 mb-5">Then tap your photo</p>
+        {origin && <QR value={url} size={220} className="rounded-2xl" />}
+        <p className="font-mono text-base mt-5 text-bone/60">
+          {origin.replace(/^https?:\/\//, "")}/join · <span className="font-bold text-bone tracking-[0.15em]">{view.code}</span>
         </p>
-        <ol className="mt-8 space-y-3 max-w-2xl">
-          {view.roundTitles.map((t, i) => (
-            <li key={i} className="flex items-start gap-4 anim-rise" style={{ animationDelay: `${300 + i * 120}ms` }}>
-              <span className="grid place-items-center w-11 h-11 shrink-0 rounded-full bg-bone text-ink font-mono text-xl font-semibold">{i + 1}</span>
-              <span>
-                <span className="block font-mono font-semibold uppercase text-2xl leading-tight">{t.title}</span>
-                <span className="block text-bone/70 leading-snug">{t.subtitle}</span>
-              </span>
-            </li>
-          ))}
-        </ol>
-        <ul className="mt-8 grid sm:grid-cols-2 gap-x-8 gap-y-2 max-w-2xl anim-rise delay-4">
-          {rules.map((r) => (
-            <li key={r} className="flex gap-2 text-bone/80">
-              <span className="text-bone">♥</span>
-              {r}
-            </li>
-          ))}
-        </ul>
+        <p className="label mt-3">{view.players.length} joined</p>
+        <Sticker name="bow" className="absolute -top-7 -right-6 w-20 rotate-12" />
       </div>
-      <div className="card relative px-8 py-8 flex flex-col items-center text-center anim-rise delay-2">
-        <p className="font-mono font-bold uppercase text-4xl">Scan to join</p>
-        <p className="label mt-1 mb-6">Camera app, point, tap the link</p>
-        {origin && <QR value={url} size={300} className="rounded-2xl" />}
-        <p className="mt-6 text-bone/60 text-sm">Or go to</p>
-        <p className="font-mono text-lg">{origin.replace(/^https?:\/\//, "")}/join</p>
-        <p className="font-mono font-bold text-5xl tracking-[0.2em] mt-1">{view.code}</p>
-        <p className="label mt-4">{view.players.length} joined</p>
-        <Sticker name="bow" className="absolute -top-8 -right-6 w-24 rotate-12" />
-        <Mascot mascots={view.mascots} pose="peekCream" className="absolute -left-10 -bottom-10 w-32" />
-      </div>
+    </div>
+  );
+}
+
+/** The cat, the title, the line. Shared by the welcome screen and the lobby. */
+function Hero({ view }: { view: RoomView }) {
+  return (
+    <div className="relative flex flex-col items-center text-center">
+      <Sparkle className="absolute left-[12%] top-6 w-14 text-bone/80 anim-pulse" />
+      <Sparkle className="absolute left-[20%] top-40 w-7 text-bone/50 anim-pulse" style={{ animationDelay: "1.1s" }} />
+      <Sparkle className="absolute right-[14%] top-28 w-10 text-bone/80 anim-pulse" style={{ animationDelay: "0.6s" }} />
+      <Mascot mascots={view.mascots} pose="peek" className="w-[clamp(10rem,17vw,16rem)] -mb-6 relative z-10 anim-rise" />
+      <TitleLockup className="anim-rise" size="clamp(3.6rem, 7vw, 7.4rem)" />
+      <p className="font-serif italic font-bold text-[clamp(1.6rem,2.6vw,2.8rem)] leading-tight mt-6 anim-rise delay-1">
+        {view.honoree.name} turns 40.
+        <br />
+        We have questions.
+      </p>
     </div>
   );
 }
@@ -276,15 +262,9 @@ function Lobby({ view, run }: { view: RoomView; run: (a: Record<string, unknown>
   const [menu, setMenu] = useState<string | null>(null);
   return (
     <div className="flex-1 grid lg:grid-cols-[1fr_1.15fr] gap-12 items-center">
-      <div className="relative flex flex-col items-center text-center">
-        <Sparkle className="absolute left-6 top-24 w-10 text-bone anim-pulse" />
-        <Sparkle className="absolute right-10 top-10 w-7 text-bone/80 anim-pulse" style={{ animationDelay: "0.6s" }} />
-        <Mascot mascots={view.mascots} pose="peek" className="w-40 -mb-5 relative z-10 anim-rise" />
-        <TitleLockup className="anim-rise" size="clamp(3.4rem, 6vw, 6.6rem)" />
-        <p className="font-serif italic font-bold text-[clamp(1.4rem,2.2vw,2.2rem)] mt-5 anim-rise delay-1">
-          {view.honoree.name} turns 40. We have questions.
-        </p>
-        <p className="mt-10 text-bone/50 anim-rise delay-4">
+      <div>
+        <Hero view={view} />
+        <p className="mt-10 text-bone/50 text-center anim-rise delay-4">
           {view.confessionCount} confession{view.confessionCount === 1 ? "" : "s"} in the vault. Players can add more from their phones while you wait.
         </p>
       </div>
