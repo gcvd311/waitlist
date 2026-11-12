@@ -1247,7 +1247,7 @@ export function buildView(
     me: meView,
     confessionCount: state.confessions.length + c.confessions.length,
     myConfessions: me ? state.confessions.filter((x) => x.author === me.name).length : 0,
-    messages: state.phase === "final" || isHost ? c.messages.filter((m) => m.text.trim() || m.photo).map((m) => ({ from: m.from, text: m.text, photo: m.photo || undefined })) : [],
+    messages: state.phase === "final" || isHost ? c.messages.map((m) => ({ from: m.from, text: m.text, photos: [...(m.photo ? [m.photo] : []), ...(m.photos ?? [])].filter(Boolean) })).filter((m) => m.text.trim() || m.photos.length) : [],
     encore: { ...ENCORE_DEFAULT, ...(c.encore ?? {}) },
     slideshow: state.phase === "final" && !!state.slideshow,
     tie: state.phase === "final" && isTie(state),

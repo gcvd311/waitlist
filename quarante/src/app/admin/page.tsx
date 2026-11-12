@@ -483,6 +483,56 @@ function ImageSlot({ url, onChange, label, className = "w-28 h-28" }: { url?: st
   );
 }
 
+/** Several photos for one message: add many at once, remove any. */
+function MessagePhotos({ photos, onChange }: { photos: string[]; onChange: (list: string[]) => void }) {
+  const [busy, setBusy] = useState(0);
+  const latest = useRef(photos);
+  latest.current = photos;
+  return (
+    <div className="flex flex-wrap gap-2 mt-2 items-center">
+      {photos.map((url, k) => (
+        <div key={url + k} className="relative w-16 h-16 rounded-xl overflow-hidden group">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt="" className="w-full h-full object-cover" />
+          <button
+            className="absolute inset-0 bg-ink/70 text-bone text-xs font-semibold opacity-0 group-hover:opacity-100 focus:opacity-100"
+            onClick={() => onChange(photos.filter((_, j) => j !== k))}
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+      <label className="w-16 h-16 rounded-xl border-2 border-dashed border-bone/25 grid place-items-center text-center text-[11px] leading-tight text-bone/55 cursor-pointer hover:border-acid">
+        {busy ? `Uploading ${busy}…` : "+ Photos"}
+        <input
+          type="file"
+          multiple
+          accept="image/png,image/webp,image/jpeg"
+          className="hidden"
+          onChange={async (e) => {
+            const files = [...(e.target.files ?? [])];
+            e.target.value = "";
+            if (!files.length) return;
+            setBusy(files.length);
+            const added: string[] = [];
+            for (const f of files) {
+              try {
+                added.push(await uploadFile(f));
+              } catch (err) {
+                alert(`${f.name}: ${(err as Error).message}`);
+              }
+              setBusy((n) => Math.max(0, n - 1));
+            }
+            onChange([...latest.current, ...added]);
+            setBusy(0);
+          }}
+        />
+      </label>
+      {photos.length > 0 && <span className="text-xs text-bone/45">{photos.length} photo{photos.length === 1 ? "" : "s"}</span>}
+    </div>
+  );
+}
+
 function MascotSection({ content, update }: { content: Content; update: Update }) {
   const [busy, setBusy] = useState(false);
   const list = content.mascots ?? [];
@@ -1136,7 +1186,7 @@ function FriendsTab({ content, update }: { content: Content; update: Update }) {
 
       <Section
         title="Messages for her"
-        hint="Played as a slideshow from the final screen, one message at a time. Add a photo to any message; without one, her photos fill in."
+        hint="Played as a slideshow from the final screen, one message at a time. Add as many photos to a message as you like (select several at once); four share a slide, more carry on to the next. Without any, her photos fill in."
         action={
           <button className="btn-ghost btn-sm" onClick={() => update((c) => void c.messages.push({ id: uid(8), from: "", text: "" }))}>
             Add
@@ -1145,10 +1195,20 @@ function FriendsTab({ content, update }: { content: Content; update: Update }) {
       >
         <div className="space-y-3">
           {content.messages.map((x, i) => (
-            <div key={x.id} className="grid grid-cols-[5rem_8rem_1fr_auto] gap-2 items-start">
-              <ImageSlot url={x.photo} label="Photo" className="w-20 h-20 text-xs" onChange={(url) => update((c) => void (c.messages[i].photo = url || undefined))} />
+            <div key={x.id} className="grid grid-cols-[8rem_1fr_auto] gap-2 items-start border-b border-bone/10 pb-3">
               <input className="box" placeholder="From" value={x.from} onChange={(e) => update((c) => void (c.messages[i].from = e.target.value))} />
-              <textarea className="box min-h-[80px]" placeholder="The message" value={x.text} onChange={(e) => update((c) => void (c.messages[i].text = e.target.value))} />
+              <div>
+                <textarea className="box min-h-[80px] w-full" placeholder="The message" value={x.text} onChange={(e) => update((c) => void (c.messages[i].text = e.target.value))} />
+                <MessagePhotos
+                  photos={[...(x.photo ? [x.photo] : []), ...(x.photos ?? [])]}
+                  onChange={(list) =>
+                    update((c) => {
+                      c.messages[i].photo = undefined;
+                      c.messages[i].photos = list;
+                    })
+                  }
+                />
+              </div>
               <button className="label hover:text-rouge pt-3" onClick={() => update((c) => void c.messages.splice(i, 1))}>
                 Delete
               </button>

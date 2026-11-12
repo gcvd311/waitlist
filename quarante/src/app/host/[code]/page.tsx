@@ -824,13 +824,54 @@ function FinalScores({ view }: { view: RoomView }) {
   );
 }
 
+/** One to four photos, laid out like prints on a table. */
+function Collage({ photos, big = false }: { photos: string[]; big?: boolean }) {
+  const n = photos.length;
+  const tilt = ["-rotate-2", "rotate-2", "rotate-1", "-rotate-1"];
+  const h = big ? 60 : 72;
+  if (n === 1)
+    return (
+      <div className={`${big ? "h-[60vh]" : "w-full max-h-[72vh]"} aspect-[4/5] mx-auto overflow-hidden rounded-2xl shadow-2xl -rotate-2`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={photos[0]} alt="" className="w-full h-full object-cover anim-drift" />
+      </div>
+    );
+  const cols = n === 2 ? 2 : 2;
+  const rows = n <= 2 ? 1 : 2;
+  return (
+    <div className="grid gap-4 mx-auto" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, height: `${h}vh`, aspectRatio: `${cols * 4} / ${rows * 5}` }}>
+      {photos.map((src, k) => (
+        <div
+          key={src + k}
+          className={`overflow-hidden rounded-xl shadow-2xl ring-4 ring-[#FFF5EC] ${tilt[k % 4]} anim-rise ${n === 3 && k === 0 ? "row-span-2" : ""}`}
+          style={{ animationDelay: `${k * 180}ms` }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={src} alt="" className="w-full h-full object-cover" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Friends' messages to her, one at a time, full screen. */
 function Slideshow({ view, run }: { view: RoomView; run: (a: Record<string, unknown>) => void }) {
   const photos = view.honoree.photos;
   const slides = useMemo(() => {
-    const out: { kind: "image" | "message" | "photo" | "end"; text?: string; from?: string; photo?: string }[] = [];
+    const out: { kind: "image" | "message" | "photo" | "end"; text?: string; from?: string; photo?: string; group?: string[] }[] = [];
     if (view.encore.image) out.push({ kind: "image", photo: view.encore.image });
-    view.messages.forEach((m, k) => out.push({ kind: "message", text: m.text, from: m.from, photo: m.photo || (photos.length ? photos[k % photos.length] : undefined) }));
+    view.messages.forEach((m, k) => {
+      const own = m.photos.length ? m.photos : photos.length ? [photos[k % photos.length]] : [];
+      // Four photos share a slide; the rest follow on their own slides under the same name.
+      const groups: string[][] = [];
+      for (let g = 0; g < own.length; g += 4) groups.push(own.slice(g, g + 4));
+      if (!m.text.trim() && groups.length) {
+        groups.forEach((group) => out.push({ kind: "message", from: m.from, group }));
+        return;
+      }
+      out.push({ kind: "message", text: m.text, from: m.from, group: groups[0] ?? [] });
+      groups.slice(1).forEach((group) => out.push({ kind: "message", from: m.from, group }));
+    });
     if (!view.messages.length) photos.forEach((ph) => out.push({ kind: "photo", photo: ph }));
     out.push({ kind: "end" });
     return out;
@@ -866,20 +907,20 @@ function Slideshow({ view, run }: { view: RoomView; run: (a: Record<string, unkn
           // eslint-disable-next-line @next/next/no-img-element
           <img src={s.photo} alt="" className="max-h-[78vh] max-w-[80vw] object-contain rounded-2xl shadow-2xl anim-drift" />
         )}
-        {s.kind === "message" && (
-          <div className={`w-full max-w-7xl grid gap-14 items-center ${s.photo ? "lg:grid-cols-[1fr_1.3fr]" : ""}`}>
-            {s.photo && (
-              <div className="aspect-[4/5] max-h-[72vh] overflow-hidden rounded-2xl shadow-2xl -rotate-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={s.photo} alt="" className="w-full h-full object-cover anim-drift" />
-              </div>
-            )}
-            <blockquote className={s.photo ? "" : "text-center mx-auto max-w-5xl"}>
-              <p className="font-serif text-[clamp(1.8rem,3.4vw,3.6rem)] leading-snug">“{s.text}”</p>
+        {s.kind === "message" && !s.text && s.group?.length ? (
+          <div className="w-full max-w-6xl flex flex-col items-center gap-8">
+            <Collage photos={s.group} big />
+            {s.from && <p className="title-face text-[clamp(1.6rem,2.6vw,2.8rem)] -rotate-[2deg]">{s.from}</p>}
+          </div>
+        ) : s.kind === "message" ? (
+          <div className={`w-full max-w-7xl grid gap-14 items-center ${s.group?.length ? (s.group.length > 1 ? "lg:grid-cols-[1.3fr_1fr]" : "lg:grid-cols-[1fr_1.3fr]") : ""}`}>
+            {!!s.group?.length && <Collage photos={s.group} />}
+            <blockquote className={s.group?.length ? "" : "text-center mx-auto max-w-5xl"}>
+              <p className={`font-serif leading-snug ${(s.text ?? "").length > 220 ? "text-[clamp(1.4rem,2.4vw,2.6rem)]" : "text-[clamp(1.8rem,3.4vw,3.6rem)]"}`}>“{s.text}”</p>
               {s.from && <footer className="title-face text-[clamp(1.6rem,2.6vw,2.8rem)] mt-8 -rotate-[2deg]">{s.from}</footer>}
             </blockquote>
           </div>
-        )}
+        ) : null}
         {s.kind === "end" && (
           <div className="text-center">
             <Sticker name="double-hearts" className="w-28 mx-auto mb-6" />

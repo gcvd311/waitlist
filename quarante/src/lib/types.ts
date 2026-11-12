@@ -85,7 +85,7 @@ export interface Content {
   honoreePassword: string; // her own login at /her
   honoreeAnswers: Record<string, string | number>; // answers she gave in advance, by question id
   confessions: { id: string; author: string; text: string }[];
-  messages: { id: string; from: string; text: string; photo?: string }[];
+  messages: { id: string; from: string; text: string; photo?: string; photos?: string[] }[];
   encore?: Encore; // the host's extras on the final screen
   updatedAt: number;
 }
@@ -273,7 +273,7 @@ export interface RoomView {
   } | null;
   confessionCount: number;
   myConfessions: number;
-  messages: { from: string; text: string; photo?: string }[];
+  messages: { from: string; text: string; photos: string[] }[];
   encore: Encore;
   slideshow: boolean;
   tie: boolean;
