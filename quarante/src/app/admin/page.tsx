@@ -270,8 +270,12 @@ function PlayTab({ content, setContent, saveState }: { content: Content; setCont
 
       <Section title="Readiness">
         <ul className="divide-y divide-bone/10 border-y border-bone/10">
-          <Check ok={content.honoree.name !== DEFAULT_CONTENT.honoree.name} label="Her name" detail={content.honoree.name} />
-          <Check ok={content.honoree.photos.length > 0} label="Photographs" detail={`${content.honoree.photos.length} uploaded`} />
+          <Check ok={!!content.honoree.name.trim()} label="Her name" detail={content.honoree.name || "Add it in the Her tab"} />
+          <Check
+            ok
+            label="Her photographs (optional)"
+            detail={content.honoree.photos.length ? `${content.honoree.photos.length} uploaded` : "None yet. They decorate round openings and fill in slideshow messages that have no photo."}
+          />
           <Check ok={girls.length >= 2 && girls.every((g) => g.photo)} label="Players’ portraits" detail={`${girls.filter((g) => g.photo).length} of ${girls.length} uploaded`} />
           <Check
             ok={girls.length >= 2 && girls.every((g) => g.malePhotos.length && g.maleName.trim())}
