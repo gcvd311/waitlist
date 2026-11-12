@@ -89,7 +89,7 @@ export function Ranking({ players, large = false, highlight }: { players: Public
         <li key={p.id} className="anim-rise" style={{ animationDelay: `${(n - 1 - i) * 650}ms` }}>
           <div className="flex items-center gap-3">
             <span className={`font-mono text-bone/40 ${large ? "w-8 text-lg" : "w-5 text-xs"}`}>{i + 1}</span>
-            <Avatar photo={p.photo} name={p.name} size={large ? 56 : 34} ring={i === 0 ? "#D6DE5B" : undefined} />
+            <Avatar photo={p.photo} name={p.name} size={large ? 56 : 34} ring={i === 0 ? "#E2AE2E" : undefined} />
             <span className={`flex-1 ${large ? "display text-4xl" : "text-lg"} ${p.id === highlight ? "text-acid" : ""}`}>{p.name}</span>
             <span className={`font-mono tabular-nums ${large ? "text-3xl" : "text-base"}`}>{p.score ?? ""}</span>
           </div>
@@ -163,8 +163,14 @@ export function Lineup({
             className={`text-left anim-rise ${onPick ? "transition active:scale-[0.98]" : ""}`}
             style={{ animationDelay: `${i * 70}ms` }}
           >
-            <Portrait photo={q.optionPhotos?.[i]} name={name} dim={chosen !== null && chosen !== undefined && !active} className={active ? "outline outline-[3px] outline-acid" : ""} />
-            <p className={`mt-1.5 ${large ? "display text-[clamp(1.2rem,2.2vw,2.2rem)]" : "font-serif text-xl"} ${active ? "text-acid" : ""}`}>{name}</p>
+            <Portrait photo={q.optionPhotos?.[i]} name={name} dim={chosen !== null && chosen !== undefined && !active} className={active ? "outline outline-[3px] outline-gold" : ""} />
+            <p
+              className={`-mt-3 relative mx-auto w-fit max-w-full truncate rounded-full px-3 py-0.5 font-mono font-semibold uppercase tracking-label ${
+                large ? "text-[clamp(0.9rem,1.4vw,1.4rem)]" : "text-[12px]"
+              } ${active ? "bg-gold text-[rgb(70_8_16)]" : "bg-acid text-ink"}`}
+            >
+              {name}
+            </p>
           </Tag>
         );
       })}
@@ -195,7 +201,15 @@ export function KfmTable({ reveal, large = false }: { reveal: RevealData; large?
 }
 
 export function OptionLetter({ i, active }: { i: number; active?: boolean }) {
-  return <span className={`font-mono text-xs w-5 shrink-0 ${active ? "text-ink/60" : "text-bone/40"}`}>{LETTERS[i]}</span>;
+  return (
+    <span
+      className={`grid place-items-center w-9 h-9 shrink-0 rounded-full font-mono text-[17px] font-semibold ${
+        active ? "bg-ink text-acid" : "bg-acid text-ink"
+      }`}
+    >
+      {LETTERS[i]}
+    </span>
+  );
 }
 
 export function revealHeadline(view: RoomView): string {

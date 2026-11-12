@@ -4,7 +4,8 @@ import Link from "next/link";
 import { hostKey, LETTERS, ROMAN, store, teamColor } from "@/lib/client";
 import { useRoom } from "@/hooks/useRoom";
 import { sfx } from "@/lib/sound";
-import { Avatar, MuteButton, Portrait, PromptText, QR, TeamDot, Timer, TitleLockup, Toast, Wordmark } from "@/components/ui";
+import { Avatar, Mascot, MuteButton, Portrait, PromptText, QR, TeamDot, Timer, TitleLockup, Toast, Wordmark } from "@/components/ui";
+import { Crown, Heart, Sparkle } from "@/components/Cat";
 import { Bars, KfmTable, Lineup, Ranking, screenGrid, revealHeadline, RevealResultList, Standings, TopPlayers, voteRows } from "@/components/game";
 import type { RoomView } from "@/lib/types";
 
@@ -83,21 +84,42 @@ export default function HostPage({ params }: { params: { code: string } }) {
 
   return (
     <main className="min-h-[100dvh] flex flex-col [--prompt-size:clamp(2.6rem,6.2vw,7.5rem)]" onClick={() => sfx.unlock()}>
-      <header className="flex items-center justify-between px-6 lg:px-12 pt-5">
-        <Wordmark className="text-2xl" />
-        <span className="label hidden sm:block">
-          {view.round && view.phase !== "lobby" && view.phase !== "final"
-            ? `Round ${ROMAN[view.round.index]} · ${view.round.title}`
-            : `For ${view.honoree.name}`}
-        </span>
-        <div className="flex items-center gap-5">
+      <header className="grid grid-cols-[1fr_auto_1fr] items-center gap-6 px-6 lg:px-12 pt-5 pb-4">
+        <Wordmark className="text-[1.7rem] -rotate-[3deg] origin-left" />
+        <div className="text-center min-w-[22rem]">
+          {view.round && ["question", "reveal", "wager"].includes(view.phase) ? (
+            <>
+              <p className="font-mono font-semibold uppercase tracking-label text-lg leading-tight">
+                {view.isTiebreak
+                  ? "Tie-breaker"
+                  : `Round ${view.round.index + 1} / ${view.round.total} · ${view.round.title} · ${view.question?.bonus ? "Bonus" : `Question ${view.round.qIndex + 1} / ${view.round.qCount}`}`}
+              </p>
+              <div className="flex items-center gap-3 mt-2">
+                <div className="flex-1 h-3 rounded-full bg-wine overflow-hidden ring-1 ring-bone/20">
+                  <div className="h-full rounded-full bg-acid transition-[width] duration-700" style={{ width: `${view.progress.total ? (view.progress.done / view.progress.total) * 100 : 0}%` }} />
+                </div>
+                <span className="font-mono text-sm uppercase tracking-label">Total: {view.progress.total}</span>
+              </div>
+            </>
+          ) : view.phase === "unmask" ? (
+            <p className="title-face text-4xl -rotate-[3deg]">The big reveal</p>
+          ) : (
+            <p className="label text-bone/80">For {view.honoree.name}</p>
+          )}
+        </div>
+        <div className="flex items-center justify-end gap-5">
           {!connected && <span className="label text-rouge anim-pulse">Offline</span>}
-          <span className="font-mono tracking-[0.25em] text-bone/70">{view.code}</span>
+          <span className="font-mono text-xl tracking-[0.25em]">{view.code}</span>
           <MuteButton />
         </div>
       </header>
 
-      <section className="flex-1 flex flex-col px-6 lg:px-12 py-6" key={`${view.phase}-${view.question?.key ?? view.round?.index ?? ""}`}>
+      <section
+        className={`flex-1 flex flex-col ${
+          view.phase === "lobby" || view.phase === "round_intro" ? "px-6 lg:px-12 py-4" : "card mx-6 lg:mx-12 mb-5 px-8 lg:px-14 py-8"
+        }`}
+        key={`${view.phase}-${view.question?.key ?? view.round?.index ?? ""}`}
+      >
         <Stage view={view} run={run} now={now} />
       </section>
 
@@ -178,14 +200,19 @@ function Lobby({ view, run }: { view: RoomView; run: (a: Record<string, unknown>
   const joinUrl = `${origin}/join/${view.code}`;
   return (
     <div className="flex-1 grid lg:grid-cols-[1fr_1.15fr] gap-12 items-center">
-      <div>
-        <TitleLockup className="anim-rise mb-10" size="clamp(3.2rem, 6.4vw, 6.8rem)" />
-        <p className="label mb-5 anim-rise">Scan, or go to {origin.replace(/^https?:\/\//, "")}/join</p>
-        <div className="flex items-end gap-8 flex-wrap">
-          {origin && <QR value={joinUrl} size={210} className="anim-rise delay-1" />}
-          <div className="anim-rise delay-2">
-            <p className="label mb-1">Room</p>
-            <p className="font-mono text-[clamp(4rem,10vw,9rem)] leading-none tracking-[0.12em]">{view.code}</p>
+      <div className="relative flex flex-col items-center text-center">
+        <Sparkle className="absolute left-6 top-24 w-10 text-bone anim-pulse" />
+        <Sparkle className="absolute right-10 top-10 w-7 text-bone/80 anim-pulse" style={{ animationDelay: "0.6s" }} />
+        <Mascot mascots={view.mascots} pose="peek" className="w-40 -mb-5 relative z-10 anim-rise" />
+        <TitleLockup className="anim-rise" size="clamp(3.4rem, 6vw, 6.6rem)" />
+        <p className="font-serif italic font-bold text-[clamp(1.4rem,2.2vw,2.2rem)] mt-5 anim-rise delay-1">
+          {view.honoree.name} turns 40. We have questions.
+        </p>
+        <div className="flex items-center gap-8 mt-8 anim-rise delay-2">
+          {origin && <QR value={joinUrl} size={180} className="rounded-2xl" />}
+          <div className="text-left">
+            <p className="label">Join at {origin.replace(/^https?:\/\//, "")}/join</p>
+            <p className="font-mono font-bold text-[clamp(3.6rem,7vw,7rem)] leading-none tracking-[0.12em] mt-1">{view.code}</p>
           </div>
         </div>
         <p className="mt-10 text-bone/50 anim-rise delay-4">
@@ -194,30 +221,32 @@ function Lobby({ view, run }: { view: RoomView; run: (a: Record<string, unknown>
       </div>
 
       {view.profiles.length > 0 && (
-        <div>
-          <div className="flex justify-between items-baseline mb-4">
-            <p className="label">Tap your photo on your phone</p>
+        <div className="card relative px-7 pt-5 pb-6">
+          <div className="text-center mb-4">
+            <p className="font-mono font-bold uppercase text-4xl">Lobby</p>
             <p className="label">
-              {view.profiles.filter((p) => p.playerId).length} / {view.profiles.length} ready
+              {view.profiles.filter((p) => p.playerId).length} of {view.profiles.length} players ready
             </p>
           </div>
-          <div className={`grid gap-4 ${view.profiles.length > 6 ? "grid-cols-4 xl:grid-cols-5" : "grid-cols-3"}`}>
+          <div
+            className="grid gap-x-4 gap-y-3 mx-auto"
+            style={{
+              gridTemplateColumns: `repeat(${view.profiles.length > 6 ? 5 : 3}, minmax(0, 1fr))`,
+              maxWidth: `calc(${view.profiles.length > 6 ? 5 : 3} * ((100vh - 470px) / 2) * 0.8)`,
+            }}
+          >
             {view.profiles.map((pr, i) => {
               const taken = !!pr.playerId;
               return (
                 <div key={pr.id} className="relative anim-rise" style={{ animationDelay: `${i * 70}ms` }}>
                   <button className="block w-full text-left" onClick={() => taken && setMenu(menu === pr.id ? null : pr.id)}>
                     <Portrait photo={pr.photo} name={pr.name} dim={!taken}>
-                      <span
-                        className={`absolute left-2 bottom-2 font-mono text-[11px] tracking-label px-2 py-1 transition ${
-                          taken ? "bg-acid text-ink" : "bg-ink/70 text-bone/60 anim-pulse"
-                        }`}
-                      >
-                        {taken ? (pr.online ? "READY" : "AWAY") : "WAITING"}
-                      </span>
-                      {pr.honoree && <span className="absolute right-2 top-2 label text-acid bg-ink/70 px-1.5 py-0.5">Birthday</span>}
+                      {pr.honoree && <span className="chip absolute right-2 top-2">Birthday</span>}
                     </Portrait>
-                    <p className={`mt-2 text-xl font-serif ${taken ? "" : "text-bone/40"}`}>{pr.name}</p>
+                    <p className={`mt-1 text-lg text-center font-semibold leading-tight ${taken ? "" : "text-bone/40"}`}>{pr.name}</p>
+                    <p className="text-center">
+                      <span className={`chip ${taken ? "" : "bg-claret text-bone/60 anim-pulse"}`}>{taken ? (pr.online ? "Ready" : "Away") : "Waiting"}</span>
+                    </p>
                   </button>
                   {menu === pr.id && pr.playerId && (
                     <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-wine border border-bone/15 p-2 flex flex-col gap-1.5 anim-fade">
@@ -237,10 +266,11 @@ function Lobby({ view, run }: { view: RoomView; run: (a: Record<string, unknown>
             })}
           </div>
           {view.players.some((p) => !p.profileId) && (
-            <p className="mt-6 text-bone/50 text-sm">
+            <p className="mt-6 text-bone/60 text-sm text-center">
               Still choosing a photo: {view.players.filter((p) => !p.profileId).map((p) => p.name).join(", ")}
             </p>
           )}
+          <Mascot mascots={view.mascots} pose="hearts" index={1} className="absolute -top-14 -right-6 w-28 rotate-6" />
         </div>
       )}
 
@@ -294,27 +324,47 @@ function Lobby({ view, run }: { view: RoomView; run: (a: Record<string, unknown>
 function RoundIntro({ view }: { view: RoomView }) {
   const r = view.round!;
   const photo = view.honoree.photos.length ? view.honoree.photos[r.index % view.honoree.photos.length] : null;
-  const showPhoto = photo && ["knowHer", "honoreeVs", "final40"].includes(r.kind);
+  const showPhoto = photo && ["knowHer", "honoreeVs", "final40", "finale"].includes(r.kind);
   return (
-    <div className="flex-1 grid lg:grid-cols-[1fr_auto] gap-12 items-center">
-      <div>
-        <p className="font-serif italic text-acid text-[clamp(5rem,14vw,14rem)] leading-none anim-rise">{ROMAN[r.index]}</p>
-        <h1 className="display text-[clamp(3rem,7.5vw,8rem)] mt-4 anim-rise delay-1">{r.title}</h1>
-        <p className="font-serif italic text-[clamp(1.4rem,2.6vw,2.6rem)] text-bone/60 mt-6 max-w-3xl anim-rise delay-2">{r.subtitle}</p>
-        <p className="label mt-12 anim-rise delay-4">
-          {r.qCount} question{r.qCount === 1 ? "" : "s"}
-          {r.kind === "final40" && " · teams wager before each"}
-          {r.kind === "mostLikely" && " · votes are anonymous"}
-          {r.kind === "honoreeVs" && " · she answers on her phone"}
-          {r.qCount === 0 && " · nothing to play, press next"}
+    <div className="flex-1 grid lg:grid-cols-[1.15fr_1fr] gap-14 items-center">
+      <div className="relative">
+        <Sparkle className="absolute -left-2 -top-6 w-10 text-bone anim-pulse" />
+        <p className="font-mono font-semibold uppercase tracking-label text-2xl anim-rise">
+          Round {r.index + 1} / {r.total}
+        </p>
+        <h1 className="title-face text-[clamp(3.4rem,7vw,8rem)] leading-[0.88] -rotate-[3deg] mt-4 anim-rise delay-1">{r.title}</h1>
+        <p className="font-serif italic font-bold text-[clamp(1.4rem,2.4vw,2.4rem)] mt-8 max-w-3xl anim-rise delay-2">{r.subtitle}</p>
+        <p className="mt-8 anim-rise delay-4">
+          <span className="chip text-base px-4 py-1">
+            {r.qCount} question{r.qCount === 1 ? "" : "s"}
+            {r.kind === "men" && " · votes are anonymous"}
+            {r.kind === "final40" && " · teams wager before each"}
+            {r.qCount === 0 && " · nothing to play, press next"}
+          </span>
         </p>
       </div>
-      {showPhoto && (
-        <div className="hidden lg:block w-[28vw] max-w-md aspect-[3/4] overflow-hidden anim-fade delay-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={photo} alt="" className="w-full h-full object-cover anim-drift grayscale-[25%]" />
-        </div>
-      )}
+      <div className="card relative px-7 py-7">
+        <p className="font-mono font-bold uppercase text-3xl text-center mb-5">Game overview</p>
+        <ol className="space-y-3">
+          {view.roundTitles.map((t, i) => (
+            <li
+              key={i}
+              className={`flex items-center gap-4 rounded-2xl border-2 px-4 py-3 anim-rise ${i === r.index ? "border-acid bg-wine" : "border-bone/10"} ${i < r.index ? "opacity-40" : ""}`}
+              style={{ animationDelay: `${200 + i * 110}ms` }}
+            >
+              <span className="grid place-items-center w-12 h-12 shrink-0 rounded-full bg-acid text-ink font-mono text-2xl font-semibold">{i + 1}</span>
+              <span className="flex-1 font-mono font-semibold uppercase text-xl leading-tight">{t.title}</span>
+              {i === r.index && <span className="chip">Now</span>}
+            </li>
+          ))}
+        </ol>
+        {showPhoto ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={photo!} alt="" className="absolute -right-6 -bottom-10 w-36 aspect-[4/5] object-cover rounded-2xl rotate-6 ring-4 ring-[#FFF5EC] shadow-xl" />
+        ) : (
+          <Mascot mascots={view.mascots} pose="wink" index={r.index} className="absolute -right-6 -bottom-12 w-32" />
+        )}
+      </div>
     </div>
   );
 }
@@ -353,7 +403,7 @@ function AnswerTally({ view }: { view: RoomView }) {
         const done = view.answeredIds.includes(p.id);
         return (
           <span key={p.id} className={`text-sm transition flex items-center gap-2 ${done ? "text-bone" : "text-bone/30"} ${p.online ? "" : "line-through"}`}>
-            <Avatar photo={p.photo} name={p.name} size={26} ring={done ? "#D6DE5B" : undefined} className={done ? "" : "opacity-40"} />
+            <Avatar photo={p.photo} name={p.name} size={26} ring={done ? "#A6111F" : undefined} className={done ? "" : "opacity-40"} />
             {p.name}
           </span>
         );
@@ -516,10 +566,13 @@ function MenResults({ view }: { view: RoomView }) {
         const win = x.n === max && max > 0;
         return (
           <div key={x.i} className="anim-rise" style={{ animationDelay: `${(rows.length - 1 - k) * 220}ms` }}>
-            <Portrait photo={x.photo} name={x.name} dim={!win} className={win ? "outline outline-4 outline-acid" : ""}>
-              <span className={`absolute right-2 bottom-2 font-mono text-4xl px-2 ${win ? "bg-acid text-ink" : "bg-ink/70 text-bone"}`}>{x.n}</span>
-            </Portrait>
-            <p className={`mt-2 display text-[clamp(1.2rem,2vw,2rem)] ${win ? "text-acid" : "text-bone/60"}`}>{x.name}</p>
+            <div className="relative">
+              {win && <Crown className="absolute -top-9 left-1/2 -translate-x-1/2 w-20 z-10" />}
+              <Portrait photo={x.photo} name={x.name} dim={!win} className={win ? "ring-[5px] ring-gold" : ""}>
+                <span className={`absolute right-2 bottom-2 grid place-items-center min-w-12 h-12 rounded-full font-mono text-3xl font-bold ${win ? "bg-acid text-ink" : "bg-ink/80 text-bone"}`}>{x.n}</span>
+              </Portrait>
+            </div>
+            <p className={`-mt-4 relative mx-auto w-fit rounded-full px-4 py-0.5 font-mono font-semibold uppercase text-[clamp(0.9rem,1.4vw,1.4rem)] ${win ? "bg-acid text-ink" : "bg-claret text-bone/70"}`}>{x.name}</p>
           </div>
         );
       })}
@@ -581,15 +634,16 @@ function UnmaskStage({ view }: { view: RoomView }) {
   const c = u.cards[u.step - 1];
   return (
     <div className="flex-1 grid lg:grid-cols-[1fr_1fr] gap-10 items-center" key={c.token}>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="relative grid grid-cols-2 gap-6">
         <div className="anim-rise">
           <Portrait photo={c.malePhoto} name={c.maleName} />
-          <p className="mt-3 display text-4xl">{c.maleName}</p>
+          <p className="chip text-2xl px-6 py-1 -mt-5 relative block w-fit mx-auto">{c.maleName}</p>
         </div>
         <div className="anim-unveil">
           <Portrait photo={c.femalePhoto} name={c.femaleName ?? "?"} />
-          <p className="mt-3 display text-4xl text-acid">{c.femaleName}</p>
+          <p className="chip text-2xl px-6 py-1 -mt-5 relative block w-fit mx-auto">{c.femaleName}</p>
         </div>
+        <Heart className="absolute left-1/2 top-[40%] -translate-x-1/2 w-16 anim-unveil" />
       </div>
       <div>
         <p className="label mb-4 anim-rise">
@@ -597,7 +651,7 @@ function UnmaskStage({ view }: { view: RoomView }) {
         </p>
         <h1 className="display text-[clamp(3rem,6.5vw,7.5rem)] leading-[0.9]">
           <span className="anim-rise block">{c.maleName}</span>
-          <span className="anim-unveil block italic text-bone/50 text-[0.6em]">is actually</span>
+          <span className="anim-unveil block font-serif italic text-bone/55 text-[0.6em]">is actually</span>
           <span className="anim-unveil block text-acid" style={{ animationDelay: "1.9s" }}>
             {c.femaleName}.
           </span>
@@ -721,7 +775,7 @@ function Dock({ view, run, hide }: { view: RoomView; run: (a: Record<string, unk
   };
   const label = primary[view.phase];
   return (
-    <div className="sticky bottom-0 z-40 bg-ink/90 backdrop-blur border-t border-bone/10">
+    <div className="sticky bottom-0 z-40 bg-wine/90 backdrop-blur border-t border-bone/10">
       {more && (
         <div className="px-6 lg:px-12 pt-4 pb-2 flex flex-wrap gap-2 items-center anim-fade">
           <span className="label mr-2">Adjust</span>

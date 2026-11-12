@@ -3,25 +3,32 @@ import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { useMuted, sfx } from "@/lib/sound";
 import { useNow } from "@/hooks/useRoom";
+import { Cat } from "./Cat";
 
 export function Wordmark({ className = "" }: { className?: string }) {
+  return <span className={`title-face whitespace-nowrap ${className}`}>40 &amp; Questionable</span>;
+}
+
+/** The title lockup from the reference: heavy italic, slightly tilted, cream on red. */
+export function TitleLockup({ className = "", size = "clamp(3.4rem, 15vw, 9rem)", tagline }: { className?: string; size?: string; tagline?: string }) {
   return (
-    <span className={`font-serif tracking-tight whitespace-nowrap ${className}`}>
-      40 <span className="italic text-acid">&amp;</span> <span className="italic">Questionable</span>
-    </span>
+    <div className={`text-center ${className}`}>
+      <h1 className="title-face -rotate-[4deg] drop-shadow-[0_4px_0_rgba(60,0,8,0.35)]" style={{ fontSize: size }}>
+        <span className="block leading-[1.02] mb-[0.04em]">40 &amp;</span>
+        <span className="block text-[0.47em] leading-[1] tracking-[-0.02em]">Questionable</span>
+      </h1>
+      {tagline && <p className="font-serif italic font-bold text-[0.36em] mt-4" style={{ fontSize: `calc(${size} * 0.3)` }}>{tagline}</p>}
+    </div>
   );
 }
 
-/** The full title lockup for the welcome, lobby and final screens. */
-export function TitleLockup({ className = "", size = "clamp(3.4rem, 15vw, 9rem)" }: { className?: string; size?: string }) {
-  return (
-    <h1 className={`display leading-[0.86] ${className}`} style={{ fontSize: size }}>
-      <span className="block">
-        40 <span className="italic text-acid">&amp;</span>
-      </span>
-      <span className="block italic">Questionable</span>
-    </h1>
-  );
+/** The cat. Shows the host’s own uploaded artwork when there is some, otherwise the built-in cat. */
+export function Mascot({ mascots = [], pose = "peek", index = 0, className = "" }: { mascots?: string[]; pose?: "peek" | "wink" | "hearts" | "sit"; index?: number; className?: string }) {
+  const own = mascots.length ? mascots[index % mascots.length] : null;
+  if (own)
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={own} alt="" className={`object-contain ${className}`} />;
+  return <Cat pose={pose} className={className} />;
 }
 
 /** A consistent portrait frame: 4:5, cover-cropped, initial when empty. */
@@ -39,12 +46,12 @@ export function Portrait({
   children?: React.ReactNode;
 }) {
   return (
-    <div className={`relative aspect-[4/5] overflow-hidden bg-claret ${className}`}>
+    <div className={`relative aspect-[4/5] overflow-hidden rounded-2xl bg-claret ${className}`}>
       {photo ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={photo} alt="" className={`absolute inset-0 w-full h-full object-cover transition duration-500 ${dim ? "grayscale opacity-45" : ""}`} />
       ) : (
-        <span className={`absolute inset-0 grid place-items-center font-serif italic text-bone/60 text-5xl ${dim ? "opacity-40" : ""}`}>
+        <span className={`absolute inset-0 grid place-items-center font-serif italic font-bold text-bone/40 text-5xl ${dim ? "opacity-40" : ""}`}>
           {name.trim().charAt(0).toUpperCase() || "?"}
         </span>
       )}
@@ -73,7 +80,7 @@ export function MuteButton({ className = "" }: { className?: string }) {
 export function QR({ value, size = 220, className = "" }: { value: string; size?: number; className?: string }) {
   const [svg, setSvg] = useState("");
   useEffect(() => {
-    QRCode.toString(value, { type: "svg", margin: 0, color: { dark: "#16090B", light: "#EEE5D6" }, errorCorrectionLevel: "M" })
+    QRCode.toString(value, { type: "svg", margin: 0, color: { dark: "#7A0C19", light: "#FFF5EC" }, errorCorrectionLevel: "M" })
       .then(setSvg)
       .catch(() => setSvg(""));
   }, [value]);

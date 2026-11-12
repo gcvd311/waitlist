@@ -52,6 +52,7 @@ export interface Content {
   players: Profile[];
   teamsEnabled: boolean;
   honoree: { name: string; tagline: string; photos: string[]; facts: { id: string; text: string }[] };
+  mascots?: string[]; // the host's own cat artwork; the built-in cat shows when empty
   guests: string[];
   teams: { id: string; name: string }[];
   rounds: RoundConfig[];
@@ -232,6 +233,8 @@ export interface RoomView {
   deadline: number | null;
   pausedRemaining: number | null;
   honoree: { name: string; tagline: string; photos: string[] };
+  mascots: string[];
+  progress: { done: number; total: number };
   teams: PublicTeam[];
   players: PublicPlayer[];
   round: { index: number; total: number; kind: RoundKind; title: string; subtitle: string; qIndex: number; qCount: number } | null;

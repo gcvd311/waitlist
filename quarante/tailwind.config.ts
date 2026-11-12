@@ -1,26 +1,32 @@
 import type { Config } from "tailwindcss";
 
+// Colours are CSS variables so a cream "surface" can flip them: on the red ground
+// bone is cream text, inside a cream card bone is deep cherry. Same classes, both contexts.
+const v = (name: string) => `rgb(var(--c-${name}) / <alpha-value>)`;
+
 export default {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        ink: "#16090B",
-        wine: "#2E0E13",
-        claret: "#4A141C",
-        bone: "#EEE5D6",
-        paper: "#F5F0E7",
-        dust: "#A8988A",
-        acid: "#D6DE5B",
-        rouge: "#D8492E",
-        sage: "#9EBBA6",
+        ink: v("ink"),
+        wine: v("wine"),
+        claret: v("claret"),
+        bone: v("bone"),
+        paper: v("paper"),
+        dust: v("dust"),
+        acid: v("acid"),
+        rouge: v("rouge"),
+        sage: v("sage"),
+        gold: v("gold"),
+        field: v("field"),
       },
       fontFamily: {
-        serif: ['"Instrument Serif"', "Georgia", "serif"],
+        serif: ['"Playfair Display"', "Georgia", "serif"],
         sans: ['"Inter Tight"', "system-ui", "sans-serif"],
-        mono: ['"IBM Plex Mono"', "ui-monospace", "monospace"],
+        mono: ['"Oswald"', '"Arial Narrow"', "sans-serif"],
       },
-      letterSpacing: { label: "0.18em" },
+      letterSpacing: { label: "0.08em" },
     },
   },
   plugins: [],

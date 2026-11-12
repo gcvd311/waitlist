@@ -143,12 +143,13 @@ function Dashboard() {
         </p>
       )}
 
-      <nav className="flex gap-1 overflow-x-auto border-b border-bone/15 mb-8 -mx-5 px-5">
+      <div className="card px-5 sm:px-8 py-6">
+      <nav className="flex gap-1 overflow-x-auto border-b border-bone/15 mb-8 -mx-5 sm:-mx-8 px-5 sm:px-8">
         {TABS.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`px-3 py-3 text-[15px] whitespace-nowrap border-b-2 -mb-px transition ${tab === t.id ? "border-acid text-bone" : "border-transparent text-bone/50 hover:text-bone"}`}
+            className={`px-3 py-3 font-mono uppercase tracking-label text-[15px] whitespace-nowrap border-b-[3px] -mb-px transition ${tab === t.id ? "border-acid text-acid" : "border-transparent text-bone/50 hover:text-bone"}`}
           >
             {t.label}
           </button>
@@ -161,6 +162,7 @@ function Dashboard() {
       {tab === "questions" && <QuestionsTab content={content} update={update} />}
       {tab === "friends" && <FriendsTab content={content} update={update} />}
       {tab === "rounds" && <RoundsTab content={content} update={update} />}
+      </div>
     </main>
   );
 }
@@ -343,6 +345,8 @@ function HerTab({ content, update }: { content: Content; update: Update }) {
 
       <HerLogin content={content} update={update} />
 
+      <MascotSection content={content} update={update} />
+
       <Section title="Photographs" hint="Shown on round openings and the final screen. Resized in your browser before upload.">
         <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
           {h.photos.map((p, i) => (
@@ -406,6 +410,57 @@ function HerTab({ content, update }: { content: Content; update: Update }) {
         </div>
       </Section>
     </div>
+  );
+}
+
+function MascotSection({ content, update }: { content: Content; update: Update }) {
+  const [busy, setBusy] = useState(false);
+  const list = content.mascots ?? [];
+  return (
+    <Section
+      title="The cat"
+      hint="Upload your own cat artwork (PNG with a transparent background looks best). It appears on the welcome, join, lobby and round screens. With nothing uploaded, the game’s own cat is used."
+    >
+      <div className="flex flex-wrap gap-4 items-end">
+        {list.map((m, i) => (
+          <div key={m.slice(-24) + i} className="w-28 text-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={m} alt="" className="w-28 h-28 object-contain bg-wine rounded-2xl" />
+            <button className="label hover:text-rouge mt-1" onClick={() => update((c) => void (c.mascots = (c.mascots ?? []).filter((_, j) => j !== i)))}>
+              Remove
+            </button>
+          </div>
+        ))}
+        <label className="w-28 h-28 rounded-2xl border-2 border-dashed border-bone/25 grid place-items-center text-center text-sm text-bone/55 cursor-pointer hover:border-acid">
+          {busy ? "Uploading…" : "Add artwork"}
+          <input
+            type="file"
+            accept="image/png,image/webp,image/jpeg"
+            className="hidden"
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              if (!f) return;
+              setBusy(true);
+              try {
+                const dataUrl = await new Promise<string>((res, rej) => {
+                  const r = new FileReader();
+                  r.onload = () => res(String(r.result));
+                  r.onerror = rej;
+                  r.readAsDataURL(f);
+                });
+                const { url } = await api<{ url: string }>("/api/admin/upload", { method: "POST", body: JSON.stringify({ dataUrl }) });
+                update((c) => void (c.mascots = [...(c.mascots ?? []), url]));
+              } catch (err) {
+                alert((err as Error).message);
+              }
+              setBusy(false);
+              e.target.value = "";
+            }}
+          />
+        </label>
+      </div>
+      <p className="text-bone/45 text-xs mt-3">With several images, different screens use different ones: the first on the welcome screen, the second in the lobby, and so on.</p>
+    </Section>
   );
 }
 

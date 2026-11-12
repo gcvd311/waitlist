@@ -52,7 +52,8 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
 export const LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X"];
-export const TEAM_COLORS = ["#D8492E", "#9EBBA6", "#D6DE5B", "#EEE5D6"];
+export const TEAM_COLORS = ["#A6111F", "#407854", "#CD9618", "#460810"];
+export const GOLD = "#E2AE2E";
 export const teamColor = (teams: { id: string }[], id: string) => TEAM_COLORS[Math.max(0, teams.findIndex((t) => t.id === id)) % TEAM_COLORS.length];
 
 /** Resize an image file in the browser before upload. */

@@ -3,7 +3,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, playerKey, squarePhoto, store, type PlayerCreds } from "@/lib/client";
-import { PhotoPicker, Portrait, TitleLockup, Wordmark } from "@/components/ui";
+import { Mascot, PhotoPicker, Portrait, TitleLockup, Wordmark } from "@/components/ui";
+import { Sparkle } from "@/components/Cat";
+import { usePublic } from "@/hooks/usePublic";
 import { sfx } from "@/lib/sound";
 
 type Peek = {
@@ -22,6 +24,7 @@ export default function JoinForm({ initialCode = "" }: { initialCode?: string })
   const [chosen, setChosen] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { mascots } = usePublic();
 
   useEffect(() => {
     const last = store.get<string>("q40:lastName");
@@ -79,40 +82,48 @@ export default function JoinForm({ initialCode = "" }: { initialCode?: string })
   }
 
   return (
-    <main className="min-h-[100dvh] px-5 pt-7 pb-10 max-w-lg mx-auto flex flex-col">
-      <header className="flex justify-between items-baseline">
+    <main className="min-h-[100dvh] px-3 pt-5 pb-10 max-w-md mx-auto flex flex-col overflow-hidden">
+      <header className="flex justify-center">
         <Link href="/">
-          <Wordmark className="text-xl" />
+          <Wordmark className="text-lg" />
         </Link>
-        <span className="label">Join</span>
       </header>
 
-      <form onSubmit={submit} className="flex-1 flex flex-col gap-9 py-8">
-        {!peek && <TitleLockup className="anim-rise" size="clamp(3rem, 16vw, 6rem)" />}
+      <form onSubmit={submit} className="flex-1 flex flex-col gap-6 pt-4">
+        {!peek ? (
+          <div className="relative flex flex-col items-center px-3 pt-4 anim-rise">
+            <Sparkle className="absolute left-4 top-10 w-6 text-bone anim-pulse" />
+            <Sparkle className="absolute right-6 top-4 w-5 text-bone/80 anim-pulse" style={{ animationDelay: "0.7s" }} />
+            <Mascot mascots={mascots} pose="peek" index={0} className="w-32" />
+            <h1 className="font-mono font-bold uppercase text-[2.6rem] leading-none mt-4 text-center">Join the game</h1>
+          </div>
+        ) : (
+          <TitleLockup className="anim-rise" size="clamp(2.4rem, 12vw, 3.4rem)" />
+        )}
 
-        <div className="anim-rise">
-          <label className="label block mb-2" htmlFor="code">
+        <div className="anim-rise px-3">
+          <label className="sr-only" htmlFor="code">
             Room code
           </label>
           <input
             id="code"
             value={code}
             onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4))}
-            className="field font-mono text-5xl tracking-[0.3em] uppercase"
-            placeholder="ABCD"
+            className="field text-center font-mono text-3xl tracking-[0.35em] uppercase"
+            placeholder="Room code"
             autoCapitalize="characters"
             autoComplete="off"
           />
           {peek && (
-            <p className="mt-3 text-sm text-bone/60 anim-fade">
-              For <span className="italic font-serif text-lg text-bone">{peek.honoree}</span> · {peek.players} in the room
+            <p className="mt-3 text-sm text-center text-bone/80 anim-fade">
+              For <span className="italic font-serif font-bold text-lg text-bone">{peek.honoree}</span> · {peek.players} in the room
             </p>
           )}
         </div>
 
         {usePortraits && (
-          <section className="anim-rise">
-            <p className="label mb-3">Tap your own photo</p>
+          <section className="card px-4 py-5 anim-rise">
+            <p className="font-mono font-semibold uppercase text-xl text-center mb-4 tracking-label">Pick your photo</p>
             <div className="grid grid-cols-3 gap-3">
               {profiles.map((p, i) => {
                 const active = chosen === p.id;
@@ -131,11 +142,10 @@ export default function JoinForm({ initialCode = "" }: { initialCode?: string })
                     style={{ animationDelay: `${i * 60}ms` }}
                   >
                     <Portrait photo={p.photo} name={p.name} dim={p.taken} className={active ? "outline outline-[3px] outline-acid" : ""}>
-                      {p.taken && (
-                        <span className="absolute left-1.5 bottom-1.5 bg-acid text-ink font-mono text-[10px] tracking-label px-1.5 py-0.5">READY</span>
-                      )}
+                      {active && <span className="absolute right-1.5 top-1.5 grid place-items-center w-7 h-7 rounded-full bg-acid text-ink text-sm font-bold">✓</span>}
+                      {p.taken && <span className="chip absolute left-1.5 bottom-1.5">Ready</span>}
                     </Portrait>
-                    <p className={`mt-1 text-sm truncate ${p.taken ? "text-bone/40" : active ? "text-acid" : ""}`}>{p.name}</p>
+                    <p className={`mt-1 text-sm text-center font-semibold truncate ${p.taken ? "text-bone/40" : active ? "text-acid" : ""}`}>{p.name}</p>
                   </button>
                 );
               })}
@@ -144,7 +154,7 @@ export default function JoinForm({ initialCode = "" }: { initialCode?: string })
         )}
 
         {(!usePortraits || picked) && (
-          <div className="anim-rise">
+          <div className="anim-rise px-3">
             <label className="label block mb-2" htmlFor="name">
               {usePortraits ? "Confirm your name" : "Your name"}
             </label>
@@ -152,7 +162,7 @@ export default function JoinForm({ initialCode = "" }: { initialCode?: string })
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value.slice(0, 20))}
-              className="field font-serif text-4xl"
+              className="field text-center text-2xl font-semibold"
               placeholder="As your friends say it"
               autoComplete="given-name"
             />
@@ -176,12 +186,12 @@ export default function JoinForm({ initialCode = "" }: { initialCode?: string })
 
         {error && <p className="text-rouge text-sm">{error}</p>}
 
-        {peek && (
+        {(
           <button
-            className="btn-acid w-full text-lg py-5 mt-auto"
+            className="btn-primary mx-3 text-xl py-4 mt-auto"
             disabled={busy || code.length !== 4 || (usePortraits ? !chosen : !name.trim())}
           >
-            {busy ? "Joining…" : usePortraits ? (picked ? `I’m ${name || picked.name}` : "Tap your photo") : "Take a seat"}
+            {busy ? "Joining…" : !peek ? "Join" : usePortraits ? (picked ? "Continue" : "Pick your photo") : "Take a seat"}
           </button>
         )}
       </form>

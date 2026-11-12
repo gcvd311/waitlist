@@ -1085,6 +1085,16 @@ export function buildView(
     deadline: state.deadline,
     pausedRemaining: state.pausedRemaining,
     honoree: { name, tagline: c.honoree.tagline, photos: c.honoree.photos },
+    mascots: c.mascots ?? [],
+    progress: (() => {
+      // Planned questions across the enabled rounds, and how far in we are.
+      // Bonus questions don't count towards the 40.
+      const main = (r: RoomRound) => (r.questions.length ? Math.min(r.count, r.questions.filter((x) => !x.bonus).length) : r.count);
+      const total = state.rounds.reduce((n, r) => n + main(r), 0);
+      const cur = state.rounds[state.roundIndex];
+      const before = state.rounds.slice(0, Math.max(0, state.roundIndex)).reduce((n, r) => n + main(r), 0);
+      return { done: state.roundIndex < 0 || !cur ? 0 : before + Math.min(main(cur), Math.max(0, state.qIndex + 1)), total };
+    })(),
     teams,
     players,
     round: round

@@ -2,14 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
+/* The red ground (default) */
 :root {
   color-scheme: dark;
+  --c-ink: 122 12 25;
+  --c-wine: 96 8 19;
+  --c-claret: 150 24 38;
+  --c-bone: 253 240 231;
+  --c-paper: 255 249 243;
+  --c-dust: 244 196 190;
+  --c-acid: 255 245 236;
+  --c-rouge: 255 178 160;
+  --c-sage: 176 216 190;
+  --c-gold: 242 196 72;
+  --c-field: 255 245 236;
+}
+
+/* A cream card: everything inside reads cherry on cream */
+.surface {
+  --c-ink: 252 242 234;
+  --c-wine: 246 228 216;
+  --c-claret: 238 208 194;
+  --c-bone: 70 8 16;
+  --c-paper: 58 6 12;
+  --c-dust: 150 92 92;
+  --c-acid: 166 17 31;
+  --c-rouge: 196 54 31;
+  --c-sage: 64 120 84;
+  --c-gold: 205 150 24;
+  --c-field: 255 255 255;
+  background: rgb(var(--c-ink));
+  color: rgb(var(--c-bone));
+  color-scheme: light;
 }
 
 html,
 body {
-  background: #16090b;
-  color: #eee5d6;
+  background: rgb(122 12 25);
+  color: rgb(var(--c-bone));
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }
@@ -18,57 +48,70 @@ body {
   font-family: "Inter Tight", system-ui, sans-serif;
   min-height: 100dvh;
   background:
-    radial-gradient(120% 70% at 50% -10%, rgba(74, 20, 28, 0.85), transparent 60%),
-    #16090b;
+    radial-gradient(90% 60% at 50% 0%, rgb(170 26 40), transparent 70%),
+    linear-gradient(180deg, rgb(132 14 28), rgb(98 8 19));
   background-attachment: fixed;
 }
 
-/* Film grain. Barely there; it stops the dark from feeling digital. */
-body::after {
-  content: "";
-  position: fixed;
-  inset: -50%;
-  pointer-events: none;
-  z-index: 60;
-  opacity: 0.06;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
-}
-
-.light-surface {
-  background: #f5f0e7;
-  color: #16090b;
+/* Leopard band: drawn, not an image */
+.leopard {
+  background-color: rgb(206 120 116);
+  background-image:
+    radial-gradient(ellipse 9px 7px at 20% 30%, rgb(120 10 24) 60%, transparent 62%),
+    radial-gradient(ellipse 7px 9px at 70% 20%, rgb(120 10 24) 60%, transparent 62%),
+    radial-gradient(ellipse 10px 6px at 45% 75%, rgb(120 10 24) 60%, transparent 62%),
+    radial-gradient(ellipse 6px 8px at 85% 70%, rgb(120 10 24) 60%, transparent 62%),
+    radial-gradient(ellipse 14px 11px at 20% 30%, rgb(245 214 200) 60%, transparent 62%),
+    radial-gradient(ellipse 11px 13px at 70% 20%, rgb(245 214 200) 60%, transparent 62%),
+    radial-gradient(ellipse 14px 10px at 45% 75%, rgb(245 214 200) 60%, transparent 62%),
+    radial-gradient(ellipse 10px 12px at 85% 70%, rgb(245 214 200) 60%, transparent 62%);
+  background-size: 64px 54px;
 }
 
 @layer components {
   .label {
-    @apply font-mono text-[11px] uppercase tracking-label text-dust;
+    @apply font-mono text-[12px] font-medium uppercase tracking-label text-dust;
   }
   .display {
-    @apply font-serif leading-[0.95] tracking-[-0.01em];
+    @apply font-sans font-bold leading-[1.02] tracking-[-0.02em];
+  }
+  .title-face {
+    font-family: "Playfair Display", Georgia, serif;
+    font-weight: 900;
+    font-style: italic;
+    text-transform: uppercase;
+    letter-spacing: -0.01em;
+    font-variant-numeric: lining-nums;
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-2 px-5 py-3.5 text-[15px] font-medium transition active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none;
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3.5 font-mono text-[16px] font-semibold uppercase tracking-[0.04em] transition active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none;
   }
   .btn-primary {
-    @apply btn bg-bone text-ink hover:bg-paper;
+    @apply btn bg-acid text-ink shadow-[0_6px_18px_-8px_rgba(0,0,0,0.45)] hover:brightness-105;
   }
   .btn-acid {
-    @apply btn bg-acid text-ink hover:brightness-105;
+    @apply btn bg-acid text-ink shadow-[0_6px_18px_-8px_rgba(0,0,0,0.45)] hover:brightness-105;
   }
   .btn-ghost {
-    @apply btn border border-bone/25 text-bone hover:border-bone/60;
+    @apply btn border-2 border-bone/30 text-bone hover:border-bone/70;
   }
   .btn-sm {
-    @apply px-3 py-2 text-[13px];
+    @apply px-4 py-2 text-[13px];
   }
   .field {
-    @apply w-full bg-transparent border-b border-bone/30 py-3 text-lg text-bone placeholder:text-bone/30 outline-none focus:border-acid transition-colors;
+    @apply w-full rounded-full bg-field px-6 py-3.5 text-lg text-[rgb(70_8_16)] placeholder:text-[rgb(70_8_16/0.4)] outline-none ring-2 ring-transparent focus:ring-gold transition;
   }
   .box {
-    @apply w-full bg-white/[0.03] border border-bone/15 px-3 py-2.5 text-[15px] text-bone placeholder:text-bone/30 outline-none focus:border-acid/70 transition-colors;
+    @apply w-full rounded-xl bg-field border border-bone/15 px-3 py-2.5 text-[15px] text-bone placeholder:text-bone/35 outline-none focus:border-acid/70 transition-colors;
   }
   .rule {
     @apply border-t border-bone/15;
+  }
+  .chip {
+    @apply inline-block rounded-full bg-acid text-ink font-mono text-[11px] font-semibold uppercase tracking-label px-2.5 py-0.5;
+  }
+  .card {
+    @apply surface rounded-[28px] shadow-[0_24px_60px_-24px_rgba(40,0,6,0.65)];
   }
 }
 
@@ -101,7 +144,7 @@ body::after {
 .anim-drift { animation: drift 18s ease-in-out infinite alternate; }
 .anim-pulse { animation: pulseDot 1.6s ease-in-out infinite; }
 .glint {
-  background: linear-gradient(100deg, #eee5d6 40%, #fffaf0 50%, #eee5d6 60%);
+  background: linear-gradient(100deg, rgb(var(--c-bone)) 40%, rgb(var(--c-gold)) 50%, rgb(var(--c-bone)) 60%);
   background-size: 250% 100%;
   -webkit-background-clip: text;
   background-clip: text;
@@ -115,7 +158,7 @@ body::after {
 .delay-4 { animation-delay: 320ms; }
 .delay-5 { animation-delay: 400ms; }
 
-input[type="range"] { accent-color: #d6de5b; }
+input[type="range"] { accent-color: rgb(var(--c-acid)); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }

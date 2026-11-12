@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { hostKey, playerKey, ROMAN, squarePhoto, store, teamColor, type PlayerCreds } from "@/lib/client";
 import { useRoom } from "@/hooks/useRoom";
 import { sfx } from "@/lib/sound";
-import { Avatar, MuteButton, PhotoPicker, Portrait, Timer, Toast, TitleLockup } from "@/components/ui";
+import { Avatar, Mascot, MuteButton, PhotoPicker, Portrait, Timer, Toast, TitleLockup } from "@/components/ui";
+import { Crown, Heart, Sparkle } from "@/components/Cat";
 import { Bars, KfmTable, Lineup, OptionLetter, Ranking, revealHeadline, Standings, voteRows } from "@/components/game";
 import HostRemote from "@/components/HostRemote";
 import type { RoomView } from "@/lib/types";
@@ -60,24 +61,37 @@ export default function PlayPage({ params }: { params: { code: string } }) {
   const myTeam = view.teams.find((t) => t.id === me.team);
   const myScore = view.players.find((p) => p.id === me.id)?.score ?? null;
 
+  const inRound = view.round && ["question", "reveal", "wager"].includes(view.phase);
+  const showTitle = view.phase === "lobby" || view.phase === "final";
   return (
     <Shell>
-      <header className="flex items-center justify-between gap-3 pb-4">
+      <header className="flex items-center justify-between gap-3 pb-3 px-1">
         <div className="flex items-center gap-2.5 min-w-0">
-          <Avatar photo={me.photo} name={me.name} size={28} ring={teamColor(view.teams, me.team)} />
-          <span className="truncate">{me.name}</span>
-          {me.isHonoree && <span className="label text-acid">Guest of honour</span>}
+          <Avatar photo={me.photo} name={me.name} size={30} ring="#FFF5EC" />
+          <span className="truncate font-semibold">{me.name}</span>
+          {me.isHonoree && <span className="chip">Birthday girl</span>}
         </div>
         <div className="flex items-center gap-4 shrink-0">
-          {myScore !== null && <span className="font-mono text-sm tabular-nums">{myScore}</span>}
+          {myScore !== null && <span className="font-mono text-lg tabular-nums">{myScore}</span>}
           <MuteButton />
         </div>
       </header>
       {!connected && <p className="label text-rouge mb-2 anim-pulse">Reconnecting…</p>}
 
-      <div className="flex-1 flex flex-col" key={`${view.phase}-${view.question?.key ?? view.round?.index ?? ""}`}>
+      {showTitle && (
+        <div className="relative pt-2 pb-6">
+          <TitleLockup size="clamp(2.4rem, 12vw, 3.4rem)" />
+          <Sparkle className="absolute left-3 top-3 w-6 text-bone/80 anim-pulse" />
+          <Sparkle className="absolute right-4 top-12 w-4 text-bone/70 anim-pulse" style={{ animationDelay: "0.6s" }} />
+        </div>
+      )}
+      {inRound && view.round && <RoundHeader view={view} />}
+      {view.phase === "unmask" && <h2 className="title-face text-center text-4xl -rotate-[3deg] pt-1 pb-5">The big reveal</h2>}
+
+      <div className="card relative flex-1 flex flex-col px-5 py-6" key={`${view.phase}-${view.question?.key ?? view.round?.index ?? ""}`}>
         <PlayerPhase view={view} act={act} now={now} setToast={setToast} teamName={myTeam?.name ?? ""} />
       </div>
+      {view.phase === "lobby" && <Mascot mascots={view.mascots} pose="hearts" index={1} className="w-28 mx-auto -mt-6 relative z-10" />}
 
       {view.paused && (
         <div className="fixed inset-0 z-40 bg-ink/90 backdrop-blur-sm grid place-items-center anim-fade">
@@ -94,7 +108,33 @@ export default function PlayPage({ params }: { params: { code: string } }) {
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
-  return <main className="min-h-[100dvh] px-5 pt-5 pb-28 max-w-md mx-auto flex flex-col">{children}</main>;
+  return <main className="min-h-[100dvh] px-3 pt-4 pb-24 max-w-md mx-auto flex flex-col">{children}</main>;
+}
+
+/** Round 1 / 4 · title · question 3 / 10, and a progress bar across the whole game. */
+function RoundHeader({ view }: { view: RoomView }) {
+  const r = view.round!;
+  const q = view.question;
+  const pct = view.progress.total ? Math.min(100, (view.progress.done / view.progress.total) * 100) : 0;
+  return (
+    <div className="text-center pb-4 px-2">
+      <p className="font-mono font-semibold uppercase tracking-label text-[15px] leading-tight">
+        {q?.kind === "tiebreak" ? "Tie-breaker" : `Round ${r.index + 1} / ${r.total}`}
+      </p>
+      {q?.kind !== "tiebreak" && <p className="font-mono font-semibold uppercase text-[17px] leading-tight">{r.title}</p>}
+      {q?.kind !== "tiebreak" && (
+        <p className="font-mono uppercase tracking-label text-[12px] text-dust mt-0.5">
+          {q?.bonus ? "Bonus question" : `Question ${Math.max(1, r.qIndex + 1)} / ${r.qCount}`}
+        </p>
+      )}
+      <div className="flex items-center gap-3 mt-3">
+        <div className="flex-1 h-3 rounded-full bg-wine/80 overflow-hidden ring-1 ring-bone/20">
+          <div className="h-full rounded-full bg-acid transition-[width] duration-700" style={{ width: `${pct}%` }} />
+        </div>
+        <span className="font-mono text-[12px] uppercase tracking-label">Total: {view.progress.total}</span>
+      </div>
+    </div>
+  );
 }
 
 function usePhaseSounds(view: RoomView | null) {
@@ -136,16 +176,7 @@ function PlayerPhase({
     case "lobby":
       return <Lobby view={view} act={act} setToast={setToast} teamName={teamName} />;
     case "round_intro":
-      return (
-        <div className="flex-1 flex flex-col justify-center">
-          <p className="label mb-4 anim-rise">
-            Round {ROMAN[view.round!.index]} of {ROMAN[view.round!.total - 1]}
-          </p>
-          <h1 className="display text-6xl anim-rise delay-1">{view.round!.title}</h1>
-          <p className="mt-5 text-bone/60 font-serif italic text-2xl anim-rise delay-2">{view.round!.subtitle}</p>
-          <p className="label mt-14 anim-pulse">Eyes on the big screen</p>
-        </div>
-      );
+      return <Overview view={view} />;
     case "wager":
       return <Wager view={view} act={act} setToast={setToast} />;
     case "question":
@@ -367,9 +398,7 @@ function Question({ view, act, now, setToast }: { view: RoomView; act: ActFn; no
   const header = (
     <>
       <div className="flex justify-between items-baseline mb-2">
-        <span className="label truncate">
-          {q.kind === "tiebreak" ? "Tie-breaker" : view.round?.title} {q.kind !== "tiebreak" && `· ${view.round!.qIndex + 1}/${view.round!.qCount}`}
-        </span>
+        <span className="label truncate">{q.category ?? (q.kind === "men" ? "Votes are anonymous" : "")}</span>
         <span className="text-2xl">
           <Timer variant="number" deadline={view.deadline} total={q.timerSec} now={now} paused={view.paused} pausedRemaining={view.pausedRemaining} onExpire={() => act({ type: "timeout" })} />
         </span>
@@ -409,7 +438,7 @@ function Question({ view, act, now, setToast }: { view: RoomView; act: ActFn; no
         {me.role === "honoree" && <p className="label text-acid mb-3">Answer honestly. Nobody can see.</p>}
         {q.kind === "honoreeVs" && me.role === "guess" && <p className="label mb-3">What will she say?</p>}
         {q.kind === "whoSaid" && <p className="label mb-3">Who said it?</p>}
-        <h1 className={`display ${q.prompt.length > 90 ? "text-3xl" : "text-4xl"} ${q.kind === "whoSaid" ? "italic" : ""} anim-rise`}>
+        <h1 className={`font-sans font-bold leading-[1.15] tracking-[-0.01em] text-center ${q.prompt.length > 90 ? "text-[1.3rem]" : "text-[1.6rem]"} ${q.kind === "whoSaid" ? "italic" : ""} anim-rise`}>
           {q.kind === "whoSaid" ? `“${q.prompt}”` : q.prompt}
         </h1>
         {q.image && (
@@ -436,13 +465,13 @@ function Question({ view, act, now, setToast }: { view: RoomView; act: ActFn; no
                 data-option={i}
                 disabled={locked || pending !== null}
                 onClick={() => submit(i)}
-                className={`w-full text-left flex items-center gap-3 px-4 py-4 border transition anim-rise ${
-                  active ? "bg-acid text-ink border-acid" : locked ? "border-bone/10 text-bone/30" : "border-bone/20 hover:border-bone/60 active:bg-bone/10"
+                className={`w-full text-left flex items-center gap-3 pl-2 pr-5 py-2 rounded-full border-2 font-semibold transition anim-rise ${
+                  active ? "bg-acid text-ink border-acid shadow-md" : locked ? "border-bone/10 text-bone/35" : "border-bone/15 bg-field hover:border-acid/60 active:scale-[0.99]"
                 }`}
                 style={{ animationDelay: `${i * 50}ms` }}
               >
                 <OptionLetter i={i} active={active} />
-                <span className="text-[17px] leading-snug">{opt}</span>
+                <span className="text-[18px] leading-snug">{opt}</span>
               </button>
             );
           })}
@@ -462,7 +491,7 @@ function Question({ view, act, now, setToast }: { view: RoomView; act: ActFn; no
           ) : (
             <>
               <input
-                className="field font-serif text-3xl"
+                className="field text-2xl font-semibold"
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder={q.type === "number" ? "Your number" : "Your answer"}
@@ -516,12 +545,13 @@ function Reveal({ view }: { view: RoomView }) {
           {team.points}
         </p>
       )}
-      <div className="anim-rise delay-2">
+      <div className={`anim-rise delay-2 ${q.kind === "men" && q.type === "vote" ? "hidden" : ""}`}>
         <p className="label mb-2">{q.kind === "men" ? "The room’s choice" : q.kind === "mostLikely" ? "The room has spoken" : "The answer"}</p>
         <p className="display text-4xl">{revealHeadline(view)}</p>
         {r.note && <p className="mt-3 text-bone/55 font-serif italic text-xl">{r.note}</p>}
       </div>
-      {q.type === "vote" && (
+      {q.kind === "men" && q.type === "vote" && <PhoneMenWinner view={view} />}
+      {q.kind !== "men" && q.type === "vote" && (
         <div className="anim-rise delay-3">
           <Bars rows={voteRows(view)} highlight={(i) => r.voteWinners?.includes(voteRows(view)[i].label) ?? false} />
         </div>
@@ -653,17 +683,82 @@ function PhoneUnmask({ view }: { view: RoomView }) {
       </div>
     );
   return (
-    <div className="flex-1 flex flex-col justify-center gap-5" key={card.token}>
-      <p className="label">
+    <div className="flex-1 flex flex-col justify-center gap-6" key={card.token}>
+      <p className="label text-center">
         {u.step} of {u.total} · {card.votes} vote{card.votes === 1 ? "" : "s"}
       </p>
-      <div className="grid grid-cols-2 gap-3">
-        <Portrait photo={card.malePhoto} name={card.maleName} className="anim-rise" />
-        <Portrait photo={card.femalePhoto} name={card.femaleName ?? "?"} className="anim-rise delay-5" />
+      <div className="relative grid grid-cols-2 gap-4">
+        <div className="anim-rise">
+          <Portrait photo={card.malePhoto} name={card.maleName} />
+          <p className="chip text-[15px] px-4 py-1 mt-3 block w-fit mx-auto">{card.maleName}</p>
+        </div>
+        <div className="anim-unveil">
+          <Portrait photo={card.femalePhoto} name={card.femaleName ?? "?"} />
+          <p className="chip text-[15px] px-4 py-1 mt-3 block w-fit mx-auto">{card.femaleName}</p>
+        </div>
+        <Heart className="absolute left-1/2 top-[38%] -translate-x-1/2 w-10 anim-unveil" />
       </div>
-      <h1 className="display text-5xl anim-rise delay-5">
-        {card.maleName} <span className="italic text-bone/50">is</span> <span className="text-acid">{card.femaleName}</span>
-      </h1>
+    </div>
+  );
+}
+
+/** The four rounds, with the current one marked. */
+function Overview({ view }: { view: RoomView }) {
+  const cur = view.round?.index ?? 0;
+  return (
+    <div className="flex-1 flex flex-col gap-4">
+      <h2 className="font-mono font-semibold uppercase text-xl text-center tracking-label">Game overview</h2>
+      <ol className="space-y-3">
+        {view.roundTitles.map((r, i) => (
+          <li
+            key={i}
+            className={`flex items-center gap-3 rounded-2xl border-2 px-3 py-2.5 anim-rise ${i === cur ? "border-acid bg-wine" : "border-bone/10"} ${i < cur ? "opacity-45" : ""}`}
+            style={{ animationDelay: `${i * 90}ms` }}
+          >
+            <span className="grid place-items-center w-10 h-10 shrink-0 rounded-full bg-acid text-ink font-mono text-lg font-semibold">{i + 1}</span>
+            <span className="flex-1">
+              <span className="block font-mono font-semibold uppercase leading-tight">{r.title}</span>
+              <span className="block text-xs text-dust uppercase font-mono tracking-label">{i === cur ? "Up now" : i < cur ? "Done" : "Coming up"}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+      {view.round && <p className="text-center font-serif italic font-bold text-xl mt-2">{view.round.subtitle}</p>}
+      <p className="label text-center anim-pulse mt-auto">Eyes on the big screen</p>
+    </div>
+  );
+}
+
+/** Round 3 result on the phone: the crowned man, his votes, then everyone else. */
+function PhoneMenWinner({ view }: { view: RoomView }) {
+  const q = view.question!;
+  const r = view.reveal!;
+  const rows = q.options.map((name, i) => ({ name, n: r.distribution[i] ?? 0, photo: q.optionPhotos?.[i] })).sort((a, b) => b.n - a.n);
+  const top = rows[0];
+  const max = Math.max(1, top?.n ?? 0);
+  return (
+    <div className="flex flex-col gap-5">
+      {top && top.n > 0 && (
+        <div className="relative w-32 mx-auto anim-rise">
+          <Crown className="absolute -top-7 left-1/2 -translate-x-1/2 w-16 z-10" />
+          <Portrait photo={top.photo} name={top.name} className="ring-4 ring-gold" />
+          <p className="chip text-lg px-5 py-1 -mt-4 relative block w-fit mx-auto">{top.name}</p>
+          <p className="font-mono text-2xl font-semibold uppercase text-center mt-2">
+            {top.n} vote{top.n === 1 ? "" : "s"}
+          </p>
+        </div>
+      )}
+      <ul className="space-y-2">
+        {rows.map((x, i) => (
+          <li key={x.name} className="flex items-center gap-3 anim-rise" style={{ animationDelay: `${300 + i * 80}ms` }}>
+            <span className="w-16 text-sm font-semibold truncate">{x.name}</span>
+            <span className="flex-1 h-3.5 rounded-full bg-wine overflow-hidden">
+              <span className="block h-full rounded-full bg-acid anim-grow" style={{ width: `${(x.n / max) * 100}%`, animationDelay: `${400 + i * 80}ms` }} />
+            </span>
+            <span className="w-5 text-right font-mono">{x.n}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
