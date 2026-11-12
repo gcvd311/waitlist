@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, LETTERS, ROMAN, store, teamColor } from "@/lib/client";
 import { buildRound, createRoomState, fillName } from "@/lib/engine";
-import { MuteButton, Portrait, TeamDot, TitleLockup, Wordmark } from "@/components/ui";
+import { Mascot, MuteButton, Portrait, Sticker, TeamDot, TitleLockup, Wordmark } from "@/components/ui";
 import { Standings } from "@/components/game";
 import { sfx } from "@/lib/sound";
 import type { Content, RoomQuestion, RoomRound } from "@/lib/types";
@@ -78,13 +78,12 @@ export default function SoloPage() {
         <Link href="/">
           <Wordmark className="text-2xl" />
         </Link>
-        <div className="flex-1 flex flex-col justify-center">
-          <p className="label mb-4">Pass &amp; play</p>
-          <h1 className="display text-6xl">
-            One phone. <span className="italic">Two teams.</span>
-          </h1>
-          <p className="mt-5 text-bone/60 leading-relaxed">
-            For when the Wi-Fi is hopeless. The host reads each question aloud, teams confer and answer out loud, and the host taps who got it right.
+        <div className="flex-1 flex flex-col justify-center items-center text-center">
+          <Mascot pose="peek" className="w-44 -mb-4" />
+          <TitleLockup size="clamp(3.4rem, 18vw, 5.4rem)" />
+          <p className="font-serif italic font-bold text-2xl mt-6">{"Crystal turns 40. We have questions."}</p>
+          <p className="mt-5 text-bone/70 leading-relaxed text-sm">
+            One phone, read aloud. For when the Wi-Fi is hopeless. The host reads each question aloud, teams confer and answer out loud, and the host taps who got it right.
           </p>
           {needsLogin && (
             <p className="text-rouge text-sm mt-6">
@@ -166,9 +165,12 @@ export default function SoloPage() {
 
       <div className="flex-1 flex flex-col" key={`${s.phase}${s.r}.${s.q}`}>
         {s.phase === "intro" && (
-          <div className="flex-1 flex flex-col justify-center">
-            <p className="font-serif italic text-acid text-8xl anim-rise">{ROMAN[s.r]}</p>
-            <h1 className="display text-6xl mt-3 anim-rise delay-1">{fillName(round.title, name)}</h1>
+          <div className="flex-1 flex flex-col justify-center items-center text-center">
+            <Mascot pose="peek" className="w-40 -mb-2 anim-rise" />
+            <p className="font-mono font-semibold uppercase tracking-label text-xl anim-rise">
+              Round {s.r + 1} / {s.rounds.length}
+            </p>
+            <h1 className="title-face text-5xl -rotate-[3deg] mt-3 anim-rise delay-1">{fillName(round.title, name)}</h1>
             <p className="font-serif italic text-2xl text-bone/60 mt-4 anim-rise delay-2">{fillName(round.subtitle, name)}</p>
             {round.kind === "mostLikely" && <p className="mt-8 text-bone/60">Read it out, count to three, everyone points. No points, only consequences.</p>}
             {round.kind === "honoreeVs" && <p className="mt-8 text-bone/60">She writes her answer down first. Teams then guess aloud.</p>}
@@ -203,7 +205,8 @@ export default function SoloPage() {
         )}
 
         {(s.phase === "question" || s.phase === "reveal") && q && (
-          <div className="flex-1 flex flex-col">
+          <div className="card relative flex-1 flex flex-col px-5 py-6">
+            <Sticker name="bow" className="absolute -top-4 -right-2 w-14 rotate-12" />
             <div className="flex justify-between label mb-2">
               <span>
                 {s.q + 1}/{round.questions.length}
@@ -350,7 +353,10 @@ export default function SoloPage() {
         {s.phase === "final" && (
           <div className="flex-1 flex flex-col justify-center gap-8">
             <TitleLockup size="clamp(3rem, 15vw, 5rem)" />
-            <p className="font-serif italic text-3xl">Happy birthday, {name}.</p>
+            <p className="font-serif italic font-bold text-3xl flex items-center gap-3 justify-center">
+              Happy birthday, {name}. <Sticker name="double-hearts" className="w-12" />
+            </p>
+            <Sticker name="cat-smile" className="w-40 mx-auto" />
             <Standings teams={teams} />
             {s.content.messages.map((m) => (
               <blockquote key={m.id} className="border-t border-bone/10 pt-4">

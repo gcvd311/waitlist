@@ -29,7 +29,9 @@ export type StickerName =
 /** One of the host's stickers from /public/stickers. The "-red" cats are cut-outs made for the red background. */
 export function Sticker({ name, className = "", style }: { name: StickerName; className?: string; style?: React.CSSProperties }) {
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={`/stickers/${name}.png`} alt="" draggable={false} className={`select-none pointer-events-none object-contain ${className}`} style={style} />;
+  // The draft editor serves stickers next to its page; the live site from /stickers.
+  const base = (typeof window !== "undefined" && (window as unknown as { __STICKERS?: string }).__STICKERS) || "/stickers/";
+  return <img src={`${base}${name}.png`} alt="" draggable={false} className={`select-none pointer-events-none object-contain ${className}`} style={style} />;
 }
 
 type Pose = "peek" | "wink" | "hearts" | "sit" | "head" | "peekCream" | "smile" | "sleepy" | "side" | "wave" | "paws";
