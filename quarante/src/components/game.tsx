@@ -178,24 +178,43 @@ export function Lineup({
   );
 }
 
-/** Kill / F / Marry results: one row per man. */
+/** Kill / F / Marry results: the top man for each fate, then everyone's tallies. */
 export function KfmTable({ reveal, large = false }: { reveal: RevealData; large?: boolean }) {
   const rows = reveal.kfm ?? [];
+  const top = (key: "k" | "f" | "m") => {
+    const max = Math.max(0, ...rows.map((r) => r[key]));
+    if (!max) return "Nobody";
+    const who = rows.filter((r) => r[key] === max).map((r) => r.label);
+    return who.length > 2 ? `A ${who.length}-way tie` : who.join(" & ");
+  };
+  const verdicts: [string, string, string][] = [
+    ["Kill", top("k"), "text-rouge"],
+    ["Fuck", top("f"), "text-acid"],
+    ["Marry", top("m"), "text-sage"],
+  ];
   return (
-    <div className={`grid gap-6 ${large ? "grid-cols-3" : "grid-cols-1"}`}>
-      {rows.map((r, i) => (
-        <div key={i} className={`anim-rise ${large ? "" : "flex gap-4 items-center"}`} style={{ animationDelay: `${i * 150}ms` }}>
-          <Portrait photo={r.photo} name={r.label} className={large ? "" : "w-24 shrink-0"} />
-          <div className={large ? "mt-3" : "flex-1"}>
-            <p className={`${large ? "display text-4xl" : "font-serif text-2xl"}`}>{r.label}</p>
-            <div className="flex gap-4 mt-2 font-mono text-sm">
-              <span className="text-rouge">Kill {r.k}</span>
-              <span className="text-acid">F {r.f}</span>
-              <span className="text-sage">Marry {r.m}</span>
-            </div>
+    <div className="space-y-6">
+      <div className={`grid gap-3 ${large ? "grid-cols-3" : "grid-cols-1"}`}>
+        {verdicts.map(([fate, who, tone], i) => (
+          <div key={fate} className="rounded-2xl bg-wine px-4 py-3 anim-rise" style={{ animationDelay: `${i * 200}ms` }}>
+            <p className={`font-mono font-semibold uppercase ${large ? "text-xl" : "text-sm"} ${tone}`}>Most {fate === "Fuck" ? "fucked" : fate === "Kill" ? "killed" : "married"}</p>
+            <p className={large ? "display text-4xl" : "font-semibold text-xl"}>{who}</p>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
+      <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${large ? Math.min(rows.length, 6) : 3}, minmax(0, 1fr))` }}>
+        {rows.map((r, i) => (
+          <div key={i} className="anim-rise" style={{ animationDelay: `${600 + i * 90}ms` }}>
+            <Portrait photo={r.photo} name={r.label} />
+            <p className={`text-center font-semibold mt-1 ${large ? "text-xl" : "text-sm"}`}>{r.label}</p>
+            <p className={`flex justify-center gap-2 font-mono ${large ? "text-base" : "text-[11px]"}`}>
+              <span className="text-rouge">K{r.k}</span>
+              <span className="text-acid">F{r.f}</span>
+              <span className="text-sage">M{r.m}</span>
+            </p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

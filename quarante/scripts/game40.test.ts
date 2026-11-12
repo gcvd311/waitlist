@@ -153,3 +153,38 @@ function buildRoundPreview(st: RoomState) {
   return st.rounds[st.roundIndex].questions;
 }
 console.log(`game40 (incl. three men): ${pass} checks passed`);
+
+// Host can step back
+{
+  const c8 = structuredClone(content);
+  c8.rounds = c8.rounds.map((r) => ({ ...r, enabled: r.kind === "past40" || r.kind === "knowHer" }));
+  const s8 = createRoomState("BACK", c8, now());
+  const pl = joinRoom(s8, "", { now: now(), isOnline: () => false, profileId: c8.players[1].id });
+  applyHostAction(s8, { type: "start" }, now());
+  applyHostAction(s8, { type: "next" }, now()); // knowHer q1
+  applyHostAction(s8, { type: "next" }, now()); // reveal
+  applyHostAction(s8, { type: "next" }, now()); // q2
+  const q2 = s8.current!.key;
+  applyHostAction(s8, { type: "back" }, now());
+  ok(s8.qIndex === 0 && phase(s8) === "reveal", "back from question 2 shows question 1 again");
+  applyHostAction(s8, { type: "back" }, now());
+  ok(phase(s8) === "round_intro", "back from the first question goes to the round intro");
+  applyHostAction(s8, { type: "next" }, now());
+  ok(s8.qIndex === 0 && phase(s8) === "question", "and forward again works");
+  // play to round 2 and step back into round 1
+  let g = 0;
+  while (!(s8.roundIndex === 1 && phase(s8) === "round_intro") && g++ < 60) applyHostAction(s8, { type: "next" }, now());
+  applyHostAction(s8, { type: "back" }, now());
+  ok(s8.roundIndex === 0 && phase(s8) === "reveal" && s8.current!.key !== q2, "back from a round intro returns to the previous round’s last question");
+  void pl;
+}
+// Kill / F / Marry uses every man
+{
+  const s9 = createRoomState("KFM", content, now());
+  content.players.forEach((pr) => joinRoom(s9, "", { now: now(), isOnline: () => false, profileId: pr.id }));
+  s9.rounds = s9.rounds.filter((r) => r.kind === "men");
+  applyHostAction(s9, { type: "start" }, now());
+  const kfm = s9.rounds[0].questions.find((q) => q.type === "kfm")!;
+  ok(kfm.options.length === content.players.length, "Kill / F / Marry shows the whole lineup");
+}
+console.log(`game40 (incl. back, kfm): ${pass} checks passed`);

@@ -635,39 +635,49 @@ function Final({ view }: { view: RoomView }) {
   );
 }
 
-/** Kill / F / Marry: give each of the three men a different fate. */
-function KfmPicker({ view, locked, answer, onSubmit }: { view: RoomView; locked: boolean; answer: string | null; onSubmit: (v: string) => void }) {
+/** Kill / F / Marry over the whole lineup: pick a fate, tap a man; it moves on to the next fate. */
+function KfmPicker({ view, answer, onSubmit }: { view: RoomView; locked?: boolean; answer: string | null; onSubmit: (v: string) => void }) {
   const q = view.question!;
   const fates = ["Kill", "Fuck", "Marry"] as const;
   const [picks, setPicks] = useState<(number | null)[]>(() => (answer ? answer.split(",").map(Number) : [null, null, null]));
+  const [fate, setFate] = useState(0);
   const fateOf = (i: number) => picks.findIndex((x) => x === i);
   const ready = picks.every((x) => x !== null);
+  const choose = (i: number) => {
+    const next = picks.map((x, k) => (k === fate ? i : x === i ? null : x));
+    setPicks(next);
+    const open = [0, 1, 2].find((k) => next[k] === null);
+    if (open !== undefined) setFate(open);
+    sfx.tap();
+  };
   return (
     <div className="mt-auto space-y-4">
-      {q.options.map((name, i) => {
-        const f = fateOf(i);
-        return (
-          <div key={i} className="flex gap-3 items-center anim-rise" style={{ animationDelay: `${i * 80}ms` }}>
-            <Portrait photo={q.optionPhotos?.[i]} name={name} className="w-20 shrink-0" />
-            <div className="flex-1">
-              <p className="font-serif text-2xl mb-2">{name}</p>
-              <div className="flex gap-1.5">
-                {fates.map((label, k) => (
-                  <button
-                    key={label}
-                    data-kfm={`${i}-${k}`}
-                    disabled={locked}
-                    onClick={() => setPicks((p) => p.map((x, j) => (j === k ? i : x === i ? null : x)))}
-                    className={`btn-sm border flex-1 ${f === k ? "bg-acid text-ink border-acid" : "border-bone/20 text-bone/70"}`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        );
-      })}
+      <div className="grid grid-cols-3 gap-2">
+        {fates.map((label, k) => (
+          <button
+            key={label}
+            data-fate={k}
+            onClick={() => setFate(k)}
+            className={`rounded-2xl border-2 px-2 py-2 text-center transition ${fate === k ? "border-acid bg-acid text-ink" : "border-bone/15 bg-field"}`}
+          >
+            <span className="block font-mono font-semibold uppercase">{label}</span>
+            <span className={`block text-xs truncate ${fate === k ? "" : "text-bone/55"}`}>{picks[k] !== null ? q.options[picks[k] as number] : "tap a man"}</span>
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {q.options.map((name, i) => {
+          const f = fateOf(i);
+          return (
+            <button key={i} data-kfm-man={i} onClick={() => choose(i)} className="text-left">
+              <Portrait photo={q.optionPhotos?.[i]} name={name} className={f >= 0 ? "outline outline-[3px] outline-acid" : ""}>
+                {f >= 0 && <span className="chip absolute left-1.5 top-1.5">{fates[f]}</span>}
+              </Portrait>
+              <p className="text-sm text-center font-semibold truncate mt-1">{name}</p>
+            </button>
+          );
+        })}
+      </div>
       <button className="btn-acid w-full py-4" disabled={!ready} onClick={() => onSubmit(picks.join(","))}>
         {answer ? "Update their fates" : "Seal their fates"}
       </button>

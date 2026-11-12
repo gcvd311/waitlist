@@ -291,7 +291,8 @@ export type HostAction =
   | { type: "kick"; playerId: string }
   | { type: "release"; playerId: string }
   | { type: "tiebreak" }
-  | { type: "backToLobby" };
+  | { type: "backToLobby" }
+  | { type: "back" };
 
 export type PlayerAction =
   | { type: "answer"; key: string; value: string | number }

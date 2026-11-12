@@ -22,6 +22,11 @@ export default function HostRemote({ code, hostToken, view }: { code: string; ho
         <span className="label mr-auto">Host</span>
         {open && (
           <>
+            {view.phase !== "lobby" && (
+              <button className="btn-ghost btn-sm" onClick={() => send({ type: "back" })}>
+                ‹ Back
+              </button>
+            )}
             <button className="btn-ghost btn-sm" onClick={() => send({ type: view.paused ? "resume" : "pause" })}>
               {view.paused ? "Resume" : "Pause"}
             </button>
