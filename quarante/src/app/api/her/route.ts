@@ -52,16 +52,30 @@ export async function POST(req: Request) {
 /** Save one answer at a time, so nothing she has typed is lost. */
 export async function PUT(req: Request) {
   try {
-    const { id, value } = await body<{ id: string; value: string | number | null }>(req);
+    const { id, value, options } = await body<{ id: string; value?: string | number | null; options?: string[] }>(req);
     await mutateContent((c) => {
       if (!isHer(c.honoreePassword)) throw new GameError("Please sign in again.", 401);
       const q = herQuestions(c).find((x) => x.id === id);
       if (!q) throw new GameError("That question no longer exists.", 404);
       c.honoreeAnswers = c.honoreeAnswers ?? {};
+      // She can write her own answer choices for multiple-choice questions.
+      if (Array.isArray(options)) {
+        if (q.type !== "mc") throw new GameError("Only multiple-choice questions have options.");
+        const clean = options.map((o) => String(o ?? "").slice(0, 80));
+        if (clean.length < 2 || clean.length > 6) throw new GameError("Between 2 and 6 options.");
+        const src = [...c.questions.knowHer, ...(c.questions.finale ?? []), ...c.questions.honoreeVs, ...c.questions.final40].find((x) => x.id === id);
+        if (!src) throw new GameError("That question no longer exists.", 404);
+        src.options = clean;
+        src.placeholder = false;
+        const mine = c.honoreeAnswers[id];
+        if (typeof mine === "number" && mine >= clean.length) delete c.honoreeAnswers[id];
+        return;
+      }
       if (value === null || value === "") delete c.honoreeAnswers[id];
       else if (q.type === "mc") {
         const n = Number(value);
-        if (!Number.isInteger(n) || n < 0 || n >= q.options.length) throw new GameError("Pick one of the options.");
+        const len = ([...c.questions.knowHer, ...(c.questions.finale ?? []), ...c.questions.honoreeVs, ...c.questions.final40].find((x) => x.id === id)?.options ?? q.options).length;
+        if (!Number.isInteger(n) || n < 0 || n >= len) throw new GameError("Pick one of the options.");
         c.honoreeAnswers[id] = n;
       } else c.honoreeAnswers[id] = String(value).trim().slice(0, 140);
     });
