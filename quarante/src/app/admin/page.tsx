@@ -224,7 +224,7 @@ function PlayTab({ content, setContent, saveState }: { content: Content; setCont
   const herTotal =
     content.questions.knowHer.filter((q) => !q.off && !q.optionsFrom).length + (content.questions.finale ?? []).filter((q) => q.askHer && !q.off).length;
   const girls = content.players ?? [];
-  const roundsShort = content.rounds.filter((r) => r.enabled && r.kind !== "whoSaid" && r.kind !== "mostLikely").filter((r) => {
+  const roundsShort = content.rounds.filter((r) => r.enabled && r.kind !== "whoSaid" && r.kind !== "mostLikely" && r.kind !== "likely").filter((r) => {
     const list = (content.questions as unknown as Record<string, { off?: boolean; bonus?: boolean }[]>)[r.kind] ?? [];
     return list.filter((q) => !q.off && !q.bonus).length < r.count;
   });
@@ -650,8 +650,8 @@ const SETS: { id: QSet | "mostLikely" | "likely"; label: string; hint: string; e
   { id: "knowHer", label: "I · Crystal Clear?", hint: "Questions about {name}. She can give her real answers on her own page, or you type them here. Add a photo to make a picture question. Free text is auto-marked leniently and you can overrule it on the reveal." },
   { id: "past40", label: "II · The Past 40 Years", hint: "1986 to 2026, played in this order. Switch on the ones you want; the rest wait in the bank. Edit any question or add your own." },
   { id: "men", label: "III · The Men", hint: "Everyone votes for one man per question; the girl behind the most-voted man gets the points. Open a question to choose which of the three men appear. Photos and names are on the Players & portraits page." },
-  { id: "finale", label: "IV · No Further Questions", hint: "A mix: Who Said That? slots (filled from the confessions), stories where the options are the girls, questions about {name}, and the final question." },
-  { id: "likely", label: "Bonus · MOST LIKELY TO...", hint: "A bonus game, separate from the 40. Everyone votes on the girls’ portraits; whoever gets the most votes earns the points (a tie pays everyone tied). Start it from the host controls: Jump to… or the final screen. Every question here is played, in this order." },
+  { id: "likely", label: "IV · MOST LIKELY TO...", hint: "Everyone votes on the girls’ portraits; whoever gets the most votes earns the points (a tie pays everyone tied). Votes are anonymous. Every question here is played, in this order, followed by the GUILTY AS CHARGED awards." },
+  { id: "finale", label: "V · No Further Questions", hint: "A mix: Who Said That? slots (filled from the confessions), stories where the options are the girls, questions about {name}, and the final question." },
   { id: "trivia", label: "General trivia", hint: "For the optional General Trivia round. Each game picks a random set at the difficulty you choose.", extra: true },
   { id: "honoreeVs", label: "Her vs. Everyone", hint: "For the optional Her vs. Everyone round.", extra: true },
   { id: "mostLikely", label: "Most Likely To", hint: "For the optional Most Likely To round.", extra: true },
@@ -1291,7 +1291,7 @@ const KIND_LABEL: Record<RoundKind, string> = {
   trivia: "General trivia",
   whoSaid: "Confessions",
   mostLikely: "Anonymous vote",
-  likely: "Bonus game: vote on the girls",
+  likely: "Vote on the girls",
   honoreeVs: "She answers, they predict",
   final40: "Wagers",
 };
@@ -1301,10 +1301,10 @@ function RoundsTab({ content, update }: { content: Content; update: Update }) {
     <div>
       <Section
         title="Rounds"
-        hint={`The default game is four rounds of ten: ${content.rounds.filter((r) => r.enabled).reduce((n, r) => n + r.count, 0)} questions with the current settings, plus any bonus questions. Optional rounds sit below, switched off. Timer 0 means no clock: the host closes each question.`}
+        hint={`The game is five rounds: ${content.rounds.filter((r) => r.enabled).reduce((n, r) => n + (r.kind === "likely" ? (content.questions.likely ?? []).length : r.count), 0)} questions with the current settings, plus any bonus questions. Optional rounds sit below, switched off. Timer 0 means no clock: the host closes each question.`}
       >
         <div className="space-y-4">
-          {content.rounds.map((r, i) => r.kind === "likely" ? null : (
+          {content.rounds.map((r, i) => (
             <div key={r.kind} className={`border border-bone/15 p-4 ${r.enabled ? "" : "opacity-50"}`}>
               <div className="flex items-center gap-3 mb-3">
                 <input type="checkbox" className="accent-acid w-4 h-4" checked={r.enabled} onChange={(e) => update((c) => void (c.rounds[i].enabled = e.target.checked))} />
@@ -1322,12 +1322,16 @@ function RoundsTab({ content, update }: { content: Content; update: Update }) {
                 <input className="box" value={r.subtitle} onChange={(e) => update((c) => void (c.rounds[i].subtitle = e.target.value))} />
               </div>
               <div className="grid grid-cols-3 gap-3 mt-3">
-                <Num label="Questions" value={r.count} onChange={(v) => update((c) => void (c.rounds[i].count = v))} />
+                {r.kind === "likely" ? (
+                  <p className="text-xs text-bone/50 self-end pb-2">Plays all {(content.questions.likely ?? []).length} questions on its list (Questions tab).</p>
+                ) : (
+                  <Num label="Questions" value={r.count} onChange={(v) => update((c) => void (c.rounds[i].count = v))} />
+                )}
                 <Num label="Timer (sec)" value={r.timerSec} onChange={(v) => update((c) => void (c.rounds[i].timerSec = v))} />
                 {r.kind === "men" ? (
                   <p className="text-xs text-bone/50 self-end pb-2">Points for this round are set under Scoring below.</p>
                 ) : (
-                  <Num label={r.kind === "final40" ? "Points (wagers decide)" : r.kind === "mostLikely" ? "Points for siding with the room" : "Points per right answer"} value={r.points} onChange={(v) => update((c) => void (c.rounds[i].points = v))} />
+                  <Num label={r.kind === "final40" ? "Points (wagers decide)" : r.kind === "mostLikely" ? "Points for siding with the room" : r.kind === "likely" ? "Points for the most votes" : "Points per right answer"} value={r.points} onChange={(v) => update((c) => void (c.rounds[i].points = v))} />
                 )}
               </div>
               <label className="flex items-center gap-2 text-sm mt-3">

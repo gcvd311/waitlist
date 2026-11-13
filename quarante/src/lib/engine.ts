@@ -6,6 +6,8 @@ import type {
   Content,
   ContentQuestion,
   Encore,
+  AwardsView,
+  Nominee,
   HostAction,
   Player,
   PlayerAction,
@@ -105,12 +107,13 @@ export function cleanName(raw: string): string {
 
 export function createRoomState(code: string, content: Content, now: number): RoomState {
   const rounds: RoomRound[] = content.rounds
-    .filter((r) => r.enabled && r.kind !== "likely") // the bonus game is launched by the host, never part of the 40
+    .filter((r) => r.enabled)
     .map((r) => ({
       kind: r.kind,
       title: r.title,
       subtitle: r.subtitle,
-      count: r.count,
+      // MOST LIKELY TO plays every question on its list.
+      count: r.kind === "likely" ? (content.questions.likely ?? []).filter((q) => q.prompt.trim()).length : r.count,
       timerSec: r.timerSec,
       points: r.points,
       includeBonus: r.includeBonus,
@@ -633,7 +636,14 @@ function advance(state: RoomState, now: number) {
       if (state.current?.kind === "tiebreak") return finish(state, now);
       const r = state.rounds[state.roundIndex];
       if (state.qIndex + 1 < r.questions.length) gotoQuestion(state, state.qIndex + 1, now);
-      else {
+      else if (r.kind === "likely" && likelyHasVotes(state)) {
+        // GUILTY AS CHARGED: the awards ceremony, before the game moves on.
+        state.current = null;
+        state.deadline = null;
+        state.phase = "awards";
+        state.awardsStep = 0;
+        state.awardsPanel = null;
+      } else {
         if (r.kind === "men") state.menRevealed = true; // no unmasking: everyone already knows who is who
         afterRound(state);
       }
@@ -646,11 +656,75 @@ function advance(state: RoomState, now: number) {
         afterRound(state);
       }
       return;
+    case "awards":
+      if ((state.awardsStep ?? 0) < 3) {
+        state.awardsStep = (state.awardsStep ?? 0) + 1;
+        state.awardsPanel = null;
+      } else {
+        state.awardsPanel = null;
+        nextRoundOrFinish(state, now);
+      }
+      return;
     case "leaderboard":
       return nextRoundOrFinish(state, now);
     case "final":
       return;
   }
+}
+
+function likelyHasVotes(state: RoomState): boolean {
+  const r = state.rounds[state.roundIndex];
+  return !!r && r.questions.some((q) => Object.keys(state.answers[q.key] ?? {}).length > 0);
+}
+
+/** "Who’s most likely to cry at the speeches?" → "Cry at the speeches" */
+export function accusation(prompt: string): string {
+  const t = prompt
+    .trim()
+    .replace(/^who(?:['’]s| is)\s+(?:the\s+)?most\s+likely\s+to\s+/i, "")
+    .replace(/[?？]+$/, "")
+    .trim();
+  return t ? t[0].toUpperCase() + t.slice(1) : prompt;
+}
+
+/** Nominations across this MOST LIKELY TO round only: totals, ties, and each girl's charge sheet. */
+export function buildAwards(state: RoomState): AwardsView | null {
+  const r = state.rounds[state.roundIndex];
+  if (!r || r.kind !== "likely") return null;
+  const people = new Map<string, Nominee & { per: { label: string; votes: number; order: number }[] }>();
+  r.questions.forEach((q, qi) => {
+    (q.optionIds ?? []).forEach((id, i) => {
+      if (!people.has(id)) {
+        const profile = state.content.players?.find((p) => p.id === id);
+        const claimed = Object.values(state.players).find((p) => p.profileId === id);
+        people.set(id, { id, name: claimed?.name || q.options[i], photo: profile?.photo || q.optionPhotos?.[i] || claimed?.photo || "", votes: 0, rank: 0, top: [], per: [] });
+      }
+    });
+    const tally: Record<string, number> = {};
+    for (const a of Object.values(state.answers[q.key] ?? {})) {
+      const id = q.optionIds?.[a.value as number];
+      if (id) tally[id] = (tally[id] ?? 0) + 1;
+    }
+    for (const [id, n] of Object.entries(tally)) {
+      const p = people.get(id);
+      if (!p) continue;
+      p.votes += n;
+      p.per.push({ label: accusation(q.prompt), votes: n, order: qi });
+    }
+  });
+  const all = [...people.values()].sort((a, b) => b.votes - a.votes || a.name.localeCompare(b.name));
+  const ranking: Nominee[] = all.map((p) => ({
+    id: p.id,
+    name: p.name,
+    photo: p.photo,
+    votes: p.votes,
+    rank: 1 + all.filter((x) => x.votes > p.votes).length,
+    top: [...p.per].sort((a, b) => b.votes - a.votes || a.order - b.order).slice(0, 3).map(({ label, votes }) => ({ label, votes })),
+  }));
+  // Gold, silver and bronze go to the three highest totals; equal totals stand on the same step.
+  const levels = [...new Set(ranking.filter((p) => p.votes > 0).map((p) => p.votes))].slice(0, 3);
+  const tiers = levels.map((v, i) => ({ place: (i + 1) as 1 | 2 | 3, votes: v, people: ranking.filter((p) => p.votes === v) }));
+  return { step: state.awardsStep ?? 0, panel: state.awardsPanel ?? null, tiers, ranking };
 }
 
 function nextRoundOrFinish(state: RoomState, now: number) {
@@ -888,6 +962,13 @@ function goBack(state: RoomState) {
       const qs = state.rounds[prev].questions;
       return showQuestion(prev, Math.max(0, qs.length - 1));
     }
+    case "awards":
+      if ((state.awardsStep ?? 0) > 0) {
+        state.awardsStep = (state.awardsStep ?? 0) - 1;
+        state.awardsPanel = null;
+        return;
+      }
+    // falls through: back from the title goes to the last question's results
     case "leaderboard":
     case "unmask": {
       const qs = state.rounds[state.roundIndex].questions;
@@ -1042,6 +1123,10 @@ export function applyHostAction(state: RoomState, action: HostAction, now: numbe
       state.finishedAt = null;
       return;
     }
+    case "awardsPanel":
+      if (state.phase !== "awards") return;
+      state.awardsPanel = action.panel === "evidence" || action.panel === "rankings" ? action.panel : null;
+      return;
     case "bonusGame": {
       // MOST LIKELY TO... slots in right after the current round, so the main game carries on afterwards.
       const base = state.content.rounds.find((r) => r.kind === "likely");
@@ -1333,6 +1418,7 @@ export function buildView(
     messages: state.phase === "final" || isHost ? c.messages.map((m) => ({ from: m.from, text: m.text, photos: [...(m.photo ? [m.photo] : []), ...(m.photos ?? [])].filter(Boolean) })).filter((m) => m.text.trim() || m.photos.length) : [],
     encore: { ...ENCORE_DEFAULT, ...(c.encore ?? {}) },
     slideshow: state.phase === "final" && !!state.slideshow,
+    awards: state.phase === "awards" ? buildAwards(state) : null,
     tie: state.phase === "final" && isTie(state),
     isTiebreak: q?.kind === "tiebreak",
     fact: (() => {

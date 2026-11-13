@@ -23,8 +23,8 @@ content.questions.finale = content.questions.finale.map((q) => (q.optionsFrom &&
 
 // ── Defaults: four rounds of ten
 const enabled = content.rounds.filter((r) => r.enabled);
-ok(enabled.length === 4 && enabled.every((r) => r.count === 10), "four rounds of ten by default");
-ok(enabled.map((r) => r.kind).join() === "knowHer,past40,men,finale", "Crystal Clear, Past 40, Men, No Further Questions");
+ok(enabled.length === 5 && enabled.filter((r) => r.kind !== "likely").every((r) => r.count === 10), "five rounds by default");
+ok(enabled.map((r) => r.kind).join() === "knowHer,past40,men,likely,finale", "Crystal Clear, Past 40, Men, Most Likely To, No Further Questions");
 ok(content.questions.past40.length >= 40 && content.questions.past40.filter((q) => !q.off).length === 10, "a large Past 40 bank with ten switched on");
 const years = content.questions.past40.map((q) => q.year!);
 ok(years.every((y, i) => i === 0 || y >= years[i - 1]) && years[0] === 1986, "Past 40 runs in order from 1986");
@@ -34,7 +34,19 @@ ok(content.honoree.name === "Crystal", "the birthday girl is Crystal");
 // ── Migration keeps old edits
 const old = { ...structuredClone(DEFAULT_CONTENT), schemaVersion: 1, rounds: [{ kind: "trivia", enabled: true, title: "x", subtitle: "", count: 12, timerSec: 20, points: 100 }] } as never;
 const migrated = mergeContent(old);
-ok(migrated.rounds.filter((r) => r.enabled).length === 4 && migrated.schemaVersion === 2, "old saves are upgraded to the four-round game");
+ok(migrated.rounds.filter((r) => r.enabled).length === 5 && migrated.schemaVersion === 3, "old saves are upgraded to the five-round game");
+{
+  // A save from before: MOST LIKELY TO parked at the end, switched off, with a host's edits elsewhere.
+  const v2 = structuredClone(DEFAULT_CONTENT) as typeof DEFAULT_CONTENT;
+  v2.schemaVersion = 2;
+  v2.rounds = [...v2.rounds.filter((r) => r.kind !== "likely"), { ...v2.rounds.find((r) => r.kind === "likely")!, enabled: false, subtitle: "A bonus game. Vote with your thumb." }];
+  v2.rounds[0].title = "Edited";
+  const m3 = mergeContent(v2);
+  ok(m3.rounds.filter((r) => r.enabled).map((r) => r.kind).join() === "knowHer,past40,men,likely,finale", "v2 saves get MOST LIKELY TO switched on, before No Further Questions");
+  ok(m3.rounds[0].title === "Edited" && m3.rounds.find((r) => r.kind === "likely")!.subtitle === "Vote with your thumb.", "and keep their edits");
+  const again = mergeContent({ ...m3, rounds: m3.rounds.map((r) => (r.kind === "likely" ? { ...r, enabled: false } : r)) });
+  ok(!again.rounds.find((r) => r.kind === "likely")!.enabled, "switching it off later sticks");
+}
 ok(migrated.questions.knowHer.some((q) => q.id === "9s4kqa"), "her draft question survives");
 
 // ── Lobby: portraits
@@ -93,10 +105,10 @@ while (s.phase !== "final" && guard++ < 500) {
         assert.ok(e instanceof GameError, String(e));
       }
     });
-    ok(phase(s) === "question", "nothing reveals until the host says so");
+    if (q.kind !== "likely") ok(phase(s) === "question", "nothing reveals until the host says so");
     const mid = buildView(s, { role: "player", pid: ids[1] }, now(), online);
     ok(mid.players.every((p) => p.score === null), "scores are sealed during the game");
-    applyHostAction(s, { type: "next" }, now());
+    if (phase(s) === "question") applyHostAction(s, { type: "next" }, now());
     ok(phase(s) === "reveal", "host reveals");
     if (q.kind === "men" && q.type === "vote") {
       const r = buildView(s, { role: "player", pid: ids[3] }, now(), online).reveal!;
@@ -257,7 +269,7 @@ console.log(`game40 (incl. jump): ${pass} checks passed`);
 {
   const c = mergeContent(structuredClone(content));
   ok(c.questions.likely.length === 20, "twenty bonus questions to start");
-  ok(!createRoomState("X", c, now()).rounds.some((r) => r.kind === "likely"), "the bonus game is not part of the 40");
+  ok(createRoomState("X", c, now()).rounds.map((r) => r.kind).join() === "knowHer,past40,men,likely,finale", "MOST LIKELY TO is round 4, before No Further Questions");
   const sb = createRoomState("LIKE", c, now());
   const ids: string[] = c.players.map((pr) => joinRoom(sb, "", { now: now(), isOnline: () => true, profileId: pr.id }).id);
   applyHostAction(sb, { type: "start" }, now()); // round 1 intro
@@ -289,14 +301,60 @@ console.log(`game40 (incl. jump): ${pass} checks passed`);
   const before = playerScore(sb, ids[1]);
   ok(before >= 10, "points go straight onto the leaderboard");
   let g = 0;
-  while (sb.roundIndex === 0 && g++ < 40) applyHostAction(sb, { type: "next" }, now());
+  while (sb.roundIndex === 0 && g++ < 80) applyHostAction(sb, { type: "next" }, now());
   ok(sb.rounds[sb.roundIndex].kind === "knowHer", "after the bonus game, the main game resumes");
   const vv = buildView(sb, { role: "host" }, now(), new Set(ids));
-  ok(vv.progress.total === 40, "the 40 still counts 40");
+  ok(vv.progress.total === 60, "progress counts the five rounds: 10 + 10 + 10 + 20 + 10");
   applyHostAction(sb, { type: "jump", round: 99 }, now());
   applyHostAction(sb, { type: "bonusGame" }, now());
   ok(phase(sb) === "round_intro" && sb.rounds[sb.roundIndex].kind === "likely", "can also be launched from the final screen");
   applyHostAction(sb, { type: "backToLobby" }, now());
-  ok(!sb.rounds.some((r) => r.kind === "likely"), "play again drops it");
+  ok(sb.rounds.filter((r) => r.kind === "likely").length === 1, "play again keeps only the regular round");
 }
 console.log(`game40 (incl. bonus game): ${pass} checks passed`);
+
+// GUILTY AS CHARGED: the awards after the last MOST LIKELY TO question
+{
+  const c = mergeContent(structuredClone(content));
+  c.questions.likely = c.questions.likely.slice(0, 3);
+  const sa = createRoomState("GUILT", c, now());
+  const ids: string[] = c.players.map((pr) => joinRoom(sa, "", { now: now(), isOnline: () => true, profileId: pr.id }).id);
+  const nameOf = (pid: string) => sa.players[pid].name;
+  applyHostAction(sa, { type: "start" }, now());
+  applyHostAction(sa, { type: "bonusGame" }, now());
+  // votes per question, by name: Bea 3+2+1 = 6, Cleo 2+2+2 = 6 (tied gold), Dora 1+1 = 2 (silver), Eva 1 (bronze)
+  const plan = [
+    ["Bea", "Bea", "Bea", "Cleo", "Cleo", "Dora"],
+    ["Bea", "Bea", "Cleo", "Cleo", "Dora", "Eva"],
+    ["Bea", "Cleo", "Cleo", "Crystal", "Crystal", "Flo"],
+  ];
+  for (let qi = 0; qi < 3; qi++) {
+    applyHostAction(sa, { type: "next" }, now()); // open the question
+    const q = sa.current!;
+    plan[qi].forEach((n, k) => applyPlayerAction(sa, ids[k], { type: "answer", key: q.key, value: q.options.indexOf(n) }, now()));
+    ok(phase(sa) === "reveal", `question ${qi + 1} revealed`);
+  }
+  applyHostAction(sa, { type: "next" }, now());
+  ok(phase(sa) === "awards" && sa.awardsStep === 0, "awards follow the last question's results");
+  const v = buildView(sa, { role: "host" }, now(), new Set(ids)).awards!;
+  ok(v.tiers[0].people.map((p) => p.name).sort().join() === "Bea,Cleo" && v.tiers[0].votes === 6, "a tie for gold is shown as a tie");
+  ok(v.tiers[1].votes === 2 && v.tiers[1].people.map((p) => p.name).sort().join() === "Crystal,Dora", "second-highest total takes silver (tied)");
+  ok(v.tiers[2].votes === 1 && v.tiers[2].people.map((p) => p.name).sort().join() === "Eva,Flo", "third-highest takes bronze");
+  const bea = v.ranking.find((p) => p.name === "Bea")!;
+  ok(bea.top[0].votes === 3 && bea.top[0].label === c.questions.likely[0].prompt.replace(/^Who’s most likely to /, "").replace(/\?$/, "").replace(/^./, (x) => x.toUpperCase()), "most accused of comes from her real votes");
+  ok(v.ranking.length === 6 && v.ranking.filter((p) => p.rank === 1).length === 2, "full rankings: everyone, ties share a place");
+  ok(v.ranking.reduce((n, p) => n + p.votes, 0) === 18, "only MOST LIKELY TO votes count");
+  for (const step of [1, 2, 3]) {
+    applyHostAction(sa, { type: "next" }, now());
+    ok(sa.awardsStep === step && phase(sa) === "awards", `host reveals step ${step}`);
+  }
+  applyHostAction(sa, { type: "awardsPanel", panel: "rankings" }, now());
+  ok(buildView(sa, { role: "player", pid: ids[2] }, now(), new Set(ids)).awards!.panel === "rankings", "phones see the panel the host opened");
+  applyHostAction(sa, { type: "back" }, now());
+  ok(sa.awardsStep === 2, "back steps the reveal back");
+  applyHostAction(sa, { type: "next" }, now());
+  applyHostAction(sa, { type: "next" }, now());
+  ok(phase(sa) === "round_intro" && sa.rounds[sa.roundIndex].kind === "knowHer", "continue goes on to the next round");
+  void nameOf;
+}
+console.log(`game40 (incl. awards): ${pass} checks passed`);

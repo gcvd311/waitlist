@@ -150,7 +150,7 @@ export interface RoomRound {
   questions: RoomQuestion[]; // built when the round starts
 }
 
-export type Phase = "lobby" | "round_intro" | "wager" | "question" | "reveal" | "unmask" | "leaderboard" | "final";
+export type Phase = "lobby" | "round_intro" | "wager" | "question" | "reveal" | "unmask" | "awards" | "leaderboard" | "final";
 
 /** A man in Round 3. The token is random per round; who he really is never leaves the server until the unmasking. */
 export interface CastMember {
@@ -197,6 +197,25 @@ export interface RoomState {
   unmaskStep: number;
   unmaskOrder: string[]; // tokens, fewest votes first
   slideshow?: boolean; // the messages slideshow is on the big screen
+  awardsStep?: number; // GUILTY AS CHARGED: 0 title, 1 bronze, 2 silver, 3 gold and the full podium
+  awardsPanel?: "evidence" | "rankings" | null;
+}
+
+/** One girl on the GUILTY AS CHARGED board: her nominations across the MOST LIKELY TO questions. */
+export interface Nominee {
+  id: string;
+  name: string;
+  photo: string;
+  votes: number;
+  rank: number; // ties share a rank
+  top: { label: string; votes: number }[]; // her most-nominated questions, most first
+}
+
+export interface AwardsView {
+  step: number;
+  panel: "evidence" | "rankings" | null;
+  tiers: { place: 1 | 2 | 3; votes: number; people: Nominee[] }[]; // gold, silver, bronze; a tie shares a step
+  ranking: Nominee[];
 }
 
 // ───────────────────────── What clients receive ─────────────────────────
@@ -278,6 +297,7 @@ export interface RoomView {
   messages: { from: string; text: string; photos: string[] }[];
   encore: Encore;
   slideshow: boolean;
+  awards: AwardsView | null;
   tie: boolean;
   isTiebreak: boolean;
   fact: string | null;
@@ -313,6 +333,7 @@ export type HostAction =
   | { type: "extraRound" }
   | { type: "slideshow"; on: boolean }
   | { type: "bonusGame" }
+  | { type: "awardsPanel"; panel: "evidence" | "rankings" | null }
   | { type: "jump"; round: number } // a round's opening, or past the last round for the final scores
   | { type: "backToLobby" }
   | { type: "back" };

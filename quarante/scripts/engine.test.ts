@@ -55,7 +55,7 @@ ok(!s.rounds[0].questions.some((q) => q.image === ""), "picture placeholder with
 
 let guard = 0;
 while (s.phase !== "final" && guard++ < 400) {
-  if (s.phase === "round_intro" || s.phase === "leaderboard" || s.phase === "reveal" || s.phase === "unmask") {
+  if (s.phase === "round_intro" || s.phase === "leaderboard" || s.phase === "reveal" || s.phase === "unmask" || s.phase === "awards") {
     applyHostAction(s, { type: "next" }, now());
     continue;
   }

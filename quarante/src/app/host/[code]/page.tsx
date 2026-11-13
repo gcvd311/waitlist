@@ -6,6 +6,7 @@ import { useRoom } from "@/hooks/useRoom";
 import { sfx } from "@/lib/sound";
 import { Avatar, Mascot, MuteButton, Portrait, PromptText, QR, Sticker, TeamDot, Timer, TitleLockup, Toast, Wordmark } from "@/components/ui";
 import { Sparkle } from "@/components/Cat";
+import { AwardsPodium, AwardsTitle, Evidence, FullRankings } from "@/components/Awards";
 import { Bars, KfmTable, Lineup, Ranking, screenGrid, revealHeadline, RevealResultList, Standings, TopPlayers, voteRows } from "@/components/game";
 import type { RoomView } from "@/lib/types";
 
@@ -111,11 +112,9 @@ export default function HostPage({ params }: { params: { code: string } }) {
               <p className="font-mono font-semibold uppercase tracking-label text-lg leading-tight">
                 {view.isTiebreak
                   ? "Tie-breaker"
-                  : view.round.kind === "likely"
-                  ? `Bonus game · ${view.round.title} · Question ${view.round.qIndex + 1} / ${view.round.qCount}`
                   : `Round ${view.round.index + 1} / ${view.round.total} · ${view.round.title} · ${view.question?.bonus ? "Bonus" : `Question ${view.round.qIndex + 1} / ${view.round.qCount}`}`}
               </p>
-              <div className={`flex items-center gap-3 mt-2 ${view.round.kind === "likely" ? "hidden" : ""}`}>
+              <div className="flex items-center gap-3 mt-2">
                 <div className="flex-1 h-3 rounded-full bg-wine overflow-hidden ring-1 ring-bone/20">
                   <div className="h-full rounded-full bg-acid transition-[width] duration-700" style={{ width: `${view.progress.total ? (view.progress.done / view.progress.total) * 100 : 0}%` }} />
                 </div>
@@ -137,7 +136,7 @@ export default function HostPage({ params }: { params: { code: string } }) {
 
       <section
         className={`flex-1 flex flex-col ${
-          view.phase === "lobby" || view.phase === "round_intro" ? "px-6 lg:px-12 py-4" : "card relative mx-6 lg:mx-12 mb-5 px-8 lg:px-14 py-8"
+          view.phase === "lobby" || view.phase === "round_intro" || view.phase === "awards" ? "px-6 lg:px-12 py-4" : "card relative mx-6 lg:mx-12 mb-5 px-8 lg:px-14 py-8"
         }`}
         key={`${onWelcome ? "welcome" : view.phase}-${view.question?.key ?? view.round?.index ?? ""}`}
       >
@@ -187,13 +186,14 @@ function useHostSounds(view: RoomView | null) {
   const last = useRef("");
   useEffect(() => {
     if (!view) return;
-    const sig = `${view.phase}:${view.question?.key ?? ""}:${view.round?.index ?? ""}`;
+    const sig = `${view.phase}:${view.question?.key ?? ""}:${view.round?.index ?? ""}:${view.awards?.step ?? ""}`;
     if (sig === last.current) return;
     const first = !last.current;
     last.current = sig;
     if (first) return;
     if (view.phase === "round_intro") sfx.round();
     else if (view.phase === "reveal") sfx.reveal();
+    else if (view.phase === "awards") (view.awards?.step === 3 ? sfx.finale() : sfx.reveal());
     else if (view.phase === "final") sfx.finale();
     else if (view.phase === "question") sfx.tap();
   }, [view]);
@@ -213,6 +213,8 @@ function Stage({ view, run, now }: { view: RoomView; run: Act | ((a: Record<stri
       return <RevealStage view={view} run={run} />;
     case "unmask":
       return <UnmaskStage view={view} />;
+    case "awards":
+      return <AwardsStage view={view} run={run} />;
     case "leaderboard":
       return <LeaderboardStage view={view} />;
     case "final":
@@ -256,6 +258,38 @@ function Hero({ view }: { view: RoomView }) {
         <br />
         We have questions.
       </p>
+    </div>
+  );
+}
+
+/** GUILTY AS CHARGED: the MOST LIKELY TO awards, revealed one step at a time by the host. */
+function AwardsStage({ view, run }: { view: RoomView; run: (a: Record<string, unknown>) => void }) {
+  const a = view.awards;
+  if (!a) return null;
+  const panel = a.panel;
+  return (
+    <div className="flex-1 relative flex flex-col justify-between gap-6">
+      <AwardsTitle large step={a.step} />
+      <AwardsPodium awards={a} large />
+      <div className={`flex justify-center gap-3 min-h-[2.5rem] ${a.step >= 3 ? "anim-fade" : "invisible"}`} style={{ animationDelay: "1.6s" }}>
+        <button className="btn-ghost btn-sm" onClick={() => run({ type: "awardsPanel", panel: panel === "evidence" ? null : "evidence" })}>
+          The evidence {panel === "evidence" ? "▴" : "▾"}
+        </button>
+        <button className="btn-ghost btn-sm" onClick={() => run({ type: "awardsPanel", panel: panel === "rankings" ? null : "rankings" })}>
+          View full rankings
+        </button>
+      </div>
+      {panel && (
+        <div className="absolute inset-x-0 bottom-14 top-[18%] z-20 card px-10 py-8 overflow-auto anim-rise">
+          <div className="flex items-baseline justify-between mb-6">
+            <p className="font-mono font-bold uppercase text-3xl">{panel === "evidence" ? "The evidence" : "Full rankings"}</p>
+            <button className="label hover:text-acid" onClick={() => run({ type: "awardsPanel", panel: null })}>
+              Close
+            </button>
+          </div>
+          {panel === "evidence" ? <Evidence awards={a} large /> : <FullRankings awards={a} large />}
+        </div>
+      )}
     </div>
   );
 }
@@ -381,7 +415,7 @@ function RoundIntro({ view }: { view: RoomView }) {
       <div className="relative">
         <Sparkle className="absolute -left-2 -top-6 w-10 text-bone anim-pulse" />
         <p className="font-mono font-semibold uppercase tracking-label text-2xl anim-rise">
-          {r.kind === "likely" ? "Bonus game" : `Round ${r.index + 1} / ${r.total}`}
+          Round {r.index + 1} / {r.total}
         </p>
         <h1 className="title-face text-[clamp(3.4rem,7vw,8rem)] leading-[0.88] -rotate-[3deg] mt-4 anim-rise delay-1">{r.title}</h1>
         <p className="font-serif italic font-bold text-[clamp(1.4rem,2.4vw,2.4rem)] mt-8 max-w-3xl anim-rise delay-2">{r.subtitle}</p>
@@ -717,7 +751,7 @@ function LeaderboardStage({ view }: { view: RoomView }) {
     const nextTitle = view.round && view.round.index + 1 < view.round.total ? view.roundTitles[view.round.index + 1]?.title : null;
     return (
       <div className="flex-1 flex flex-col justify-center">
-        <p className="label mb-4 anim-rise">{view.round?.kind === "likely" ? "Bonus game" : `Round ${ROMAN[view.round?.index ?? 0]}`} complete</p>
+        <p className="label mb-4 anim-rise">Round {ROMAN[view.round?.index ?? 0]} complete</p>
         <h1 className="display text-[clamp(3rem,7vw,7.5rem)] anim-rise delay-1">
           The scores are <span className="italic text-acid">sealed.</span>
         </h1>
@@ -736,7 +770,7 @@ function LeaderboardStage({ view }: { view: RoomView }) {
   return (
     <div className="flex-1 grid lg:grid-cols-[1.4fr_1fr] gap-16 items-center">
       <div>
-        <p className="label mb-6">After {view.round?.kind === "likely" ? "the bonus game" : `round ${ROMAN[view.round?.index ?? 0]}`}{isLast ? " · that was the last" : ""}</p>
+        <p className="label mb-6">After round {ROMAN[view.round?.index ?? 0]}{isLast ? " · that was the last" : ""}</p>
         {view.teamsEnabled ? <Standings teams={view.teams} large /> : <Ranking players={view.players} large />}
       </div>
       <div>
@@ -832,9 +866,10 @@ function Collage({ photos, big = false }: { photos: string[]; big?: boolean }) {
   const vh = big ? 60 : 72;
   if (n === 1)
     return (
-      <div className={`${big ? "h-[60vh]" : "w-full max-h-[72vh]"} aspect-[4/5] mx-auto overflow-hidden rounded-2xl shadow-2xl -rotate-2`}>
+      // The whole photo, never cropped: it keeps its own shape.
+      <div className="flex justify-center items-center -rotate-2">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={photos[0]} alt="" className="w-full h-full object-cover anim-drift" />
+        <img src={photos[0]} alt="" className={`${big ? "max-h-[60vh]" : "max-h-[72vh]"} max-w-full w-auto h-auto object-contain rounded-2xl shadow-2xl`} />
       </div>
     );
   // Any number of photos on one slide: the grid grows a column as the pile grows.
@@ -854,11 +889,11 @@ function Collage({ photos, big = false }: { photos: string[]; big?: boolean }) {
       {photos.map((src, k) => (
         <div
           key={src + k}
-          className={`overflow-hidden rounded-xl shadow-2xl ring-4 ring-[#FFF5EC] ${tilt[k % 4]} anim-rise ${n === 3 && k === 0 ? "row-span-2" : ""}`}
+          className={`min-h-0 min-w-0 flex items-center justify-center ${tilt[k % 4]} anim-rise ${n === 3 && k === 0 ? "row-span-2" : ""}`}
           style={{ animationDelay: `${k * 120}ms` }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={src} alt="" className="w-full h-full object-cover" />
+          <img src={src} alt="" className="max-w-full max-h-full object-contain rounded-xl shadow-2xl ring-4 ring-[#FFF5EC]" />
         </div>
       ))}
     </div>
@@ -971,6 +1006,7 @@ function Dock({
     question: view.question?.kind === "men" || view.question?.kind === "likely" ? "Close voting" : "Reveal now",
     reveal: "Next",
     unmask: !view.unmask ? "Next" : view.unmask.step === 0 ? "Unmask the first" : view.unmask.step < view.unmask.total ? "Unmask the next" : view.unmask.step === view.unmask.total ? "Show them all" : "Continue",
+    awards: !view.awards ? "Continue" : view.awards.step === 0 ? "Start the reveal" : view.awards.step < 3 ? "Next reveal" : view.round && view.round.index + 1 < view.round.total ? "Continue to the next round" : "Continue",
     leaderboard: view.round && view.round.index + 1 < view.round.total ? "Next round" : "Reveal the final scores",
     final: "",
   };
@@ -1034,11 +1070,8 @@ function Dock({
           className="btn-ghost btn-sm bg-transparent cursor-pointer w-36"
           value=""
           onChange={(e) => {
-            if (e.target.value === "bonus") run({ type: "bonusGame" });
-            else {
-              const v = Number(e.target.value);
-              if (e.target.value !== "" && !Number.isNaN(v)) run({ type: "jump", round: v });
-            }
+            const v = Number(e.target.value);
+            if (e.target.value !== "" && !Number.isNaN(v)) run({ type: "jump", round: v });
             if (welcome) setWelcome(false);
           }}
           title="Jump straight to a round or the final scores"
@@ -1046,14 +1079,11 @@ function Dock({
           <option value="">Jump to…</option>
           {view.roundTitles.map((t, k) => (
             <option key={k} value={k} className="text-ink">
-              {t.kind === "likely" ? "Bonus" : `Round ${k + 1}`}: {t.title}
+              Round {k + 1}: {t.title}
             </option>
           ))}
           <option value={view.roundTitles.length} className="text-ink">
             Final scores and slideshow
-          </option>
-          <option value="bonus" className="text-ink">
-            Bonus game: MOST LIKELY TO...
           </option>
         </select>
         {view.phase === "lobby" && !welcome && (
@@ -1098,9 +1128,6 @@ function Dock({
                     Messages for {view.honoree.name}
                   </button>
                 )}
-                <button className="btn-ghost btn-sm" onClick={() => run({ type: "bonusGame" })}>
-                  Most likely to…
-                </button>
                 {view.encore.extraRound && (
                   <button className="btn-ghost btn-sm" onClick={() => run({ type: "extraRound" })}>
                     Extra round
