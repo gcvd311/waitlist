@@ -832,9 +832,10 @@ function Collage({ photos, big = false }: { photos: string[]; big?: boolean }) {
   const vh = big ? 60 : 72;
   if (n === 1)
     return (
-      <div className={`${big ? "h-[60vh]" : "w-full max-h-[72vh]"} aspect-[4/5] mx-auto overflow-hidden rounded-2xl shadow-2xl -rotate-2`}>
+      // The whole photo, never cropped: it keeps its own shape.
+      <div className="flex justify-center items-center -rotate-2">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={photos[0]} alt="" className="w-full h-full object-cover anim-drift" />
+        <img src={photos[0]} alt="" className={`${big ? "max-h-[60vh]" : "max-h-[72vh]"} max-w-full w-auto h-auto object-contain rounded-2xl shadow-2xl`} />
       </div>
     );
   // Any number of photos on one slide: the grid grows a column as the pile grows.
@@ -854,11 +855,11 @@ function Collage({ photos, big = false }: { photos: string[]; big?: boolean }) {
       {photos.map((src, k) => (
         <div
           key={src + k}
-          className={`overflow-hidden rounded-xl shadow-2xl ring-4 ring-[#FFF5EC] ${tilt[k % 4]} anim-rise ${n === 3 && k === 0 ? "row-span-2" : ""}`}
+          className={`min-h-0 min-w-0 flex items-center justify-center ${tilt[k % 4]} anim-rise ${n === 3 && k === 0 ? "row-span-2" : ""}`}
           style={{ animationDelay: `${k * 120}ms` }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={src} alt="" className="w-full h-full object-cover" />
+          <img src={src} alt="" className="max-w-full max-h-full object-contain rounded-xl shadow-2xl ring-4 ring-[#FFF5EC]" />
         </div>
       ))}
     </div>
