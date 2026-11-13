@@ -36,5 +36,14 @@ export function mergeContent(raw: Partial<Content> | null | undefined): Content 
     if (!raw.honoree?.name || raw.honoree.name === "The Birthday Girl") merged.honoree.name = d.honoree.name;
     merged.schemaVersion = SCHEMA_VERSION;
   }
+  // Version 2 → 3: MOST LIKELY TO... becomes a real round, played just before No Further Questions.
+  if ((raw.schemaVersion ?? 1) < 3) {
+    const likely = { ...(merged.rounds.find((r) => r.kind === "likely") ?? d.rounds.find((r) => r.kind === "likely")!), enabled: true };
+    likely.subtitle = likely.subtitle.replace(/^A bonus game\. /, "");
+    const rest = merged.rounds.filter((r) => r.kind !== "likely");
+    const at = rest.findIndex((r) => r.kind === "finale");
+    merged.rounds = at < 0 ? [...rest, likely] : [...rest.slice(0, at), likely, ...rest.slice(at)];
+    merged.schemaVersion = SCHEMA_VERSION;
+  }
   return merged;
 }

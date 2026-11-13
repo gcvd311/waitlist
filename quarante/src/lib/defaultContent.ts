@@ -24,7 +24,7 @@ const mc = (id: string, prompt: string, options: string[], extra: Partial<Conten
 });
 
 export const GAME_TITLE = "40 & Questionable";
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 const MALE_NAMES = ["Chad", "Brad", "Todd", "Kyle", "Trent", "Lance"];
 
@@ -54,12 +54,12 @@ export const DEFAULT_CONTENT: Content = {
     { kind: "knowHer", enabled: true, title: "Crystal Clear?", subtitle: "Forty years of evidence. Let’s see who was paying attention.", count: 10, timerSec: 45, points: 100 },
     { kind: "past40", enabled: true, title: "The Past 40 Years", subtitle: "1986 to now, in order. Some of it you were too young for.", count: 10, timerSec: 20, points: 100 },
     { kind: "men", enabled: true, title: "The Men of Questionable Taste", subtitle: "A lineup of gentlemen. Vote with your conscience, or don’t.", count: 10, timerSec: 0, points: 0, includeBonus: true },
+    { kind: "likely", enabled: true, title: "MOST LIKELY TO...", subtitle: "Vote with your thumb. Live with the consequences.", count: 20, timerSec: 0, points: 10 },
     { kind: "finale", enabled: true, title: "No Further Questions", subtitle: "Confessions, revelations, and one last question for the birthday girl.", count: 10, timerSec: 30, points: 100 },
     { kind: "trivia", enabled: false, title: "General Trivia", subtitle: "Everything you once knew and swore you’d never forget.", count: 10, timerSec: 20, points: 100 },
     { kind: "whoSaid", enabled: false, title: "Who Said That?", subtitle: "Anonymous confessions. Not anonymous for long.", count: 8, timerSec: 30, points: 100 },
     { kind: "mostLikely", enabled: false, title: "Most Likely To", subtitle: "Secret ballot. Public consequences.", count: 8, timerSec: 20, points: 50 },
     { kind: "honoreeVs", enabled: false, title: "{name} vs. Everyone", subtitle: "She answers in private. You try to read her mind.", count: 6, timerSec: 30, points: 100 },
-    { kind: "likely", enabled: false, title: "MOST LIKELY TO...", subtitle: "A bonus game. Vote with your thumb. Live with the consequences.", count: 10, timerSec: 0, points: 10 },
     { kind: "final40", enabled: false, title: "The Wager", subtitle: "Teams only. Wager what you can afford to lose.", count: 6, timerSec: 30, points: 0 },
   ],
   scoring: { speedBonus: 50, surpriseMultiplier: 2, mostLikelyConsensus: 50, wagerFloor: 200, menWinner: 100, menParticipation: 0, hideScoresUntilEnd: true, autoReveal: false },

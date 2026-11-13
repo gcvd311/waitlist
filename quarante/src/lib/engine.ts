@@ -107,12 +107,13 @@ export function cleanName(raw: string): string {
 
 export function createRoomState(code: string, content: Content, now: number): RoomState {
   const rounds: RoomRound[] = content.rounds
-    .filter((r) => r.enabled && r.kind !== "likely") // the bonus game is launched by the host, never part of the 40
+    .filter((r) => r.enabled)
     .map((r) => ({
       kind: r.kind,
       title: r.title,
       subtitle: r.subtitle,
-      count: r.count,
+      // MOST LIKELY TO plays every question on its list.
+      count: r.kind === "likely" ? (content.questions.likely ?? []).filter((q) => q.prompt.trim()).length : r.count,
       timerSec: r.timerSec,
       points: r.points,
       includeBonus: r.includeBonus,
