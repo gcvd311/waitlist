@@ -111,9 +111,11 @@ export default function HostPage({ params }: { params: { code: string } }) {
               <p className="font-mono font-semibold uppercase tracking-label text-lg leading-tight">
                 {view.isTiebreak
                   ? "Tie-breaker"
+                  : view.round.kind === "likely"
+                  ? `Bonus game · ${view.round.title} · Question ${view.round.qIndex + 1} / ${view.round.qCount}`
                   : `Round ${view.round.index + 1} / ${view.round.total} · ${view.round.title} · ${view.question?.bonus ? "Bonus" : `Question ${view.round.qIndex + 1} / ${view.round.qCount}`}`}
               </p>
-              <div className="flex items-center gap-3 mt-2">
+              <div className={`flex items-center gap-3 mt-2 ${view.round.kind === "likely" ? "hidden" : ""}`}>
                 <div className="flex-1 h-3 rounded-full bg-wine overflow-hidden ring-1 ring-bone/20">
                   <div className="h-full rounded-full bg-acid transition-[width] duration-700" style={{ width: `${view.progress.total ? (view.progress.done / view.progress.total) * 100 : 0}%` }} />
                 </div>
@@ -139,7 +141,7 @@ export default function HostPage({ params }: { params: { code: string } }) {
         }`}
         key={`${onWelcome ? "welcome" : view.phase}-${view.question?.key ?? view.round?.index ?? ""}`}
       >
-        {view.phase === "question" && view.question?.kind !== "men" && <Sticker name="bow" className="absolute -top-8 -right-6 w-28 rotate-12" />}
+        {view.phase === "question" && view.question?.kind !== "men" && view.question?.kind !== "likely" && <Sticker name="bow" className="absolute -top-8 -right-6 w-28 rotate-12" />}
         {onWelcome ? <Welcome view={view} /> : <Stage view={view} run={run} now={now} />}
       </section>
 
@@ -379,7 +381,7 @@ function RoundIntro({ view }: { view: RoomView }) {
       <div className="relative">
         <Sparkle className="absolute -left-2 -top-6 w-10 text-bone anim-pulse" />
         <p className="font-mono font-semibold uppercase tracking-label text-2xl anim-rise">
-          Round {r.index + 1} / {r.total}
+          {r.kind === "likely" ? "Bonus game" : `Round ${r.index + 1} / ${r.total}`}
         </p>
         <h1 className="title-face text-[clamp(3.4rem,7vw,8rem)] leading-[0.88] -rotate-[3deg] mt-4 anim-rise delay-1">{r.title}</h1>
         <p className="font-serif italic font-bold text-[clamp(1.4rem,2.4vw,2.4rem)] mt-8 max-w-3xl anim-rise delay-2">{r.subtitle}</p>
@@ -469,7 +471,7 @@ function AnswerTally({ view }: { view: RoomView }) {
 function QuestionStage({ view, now, run }: { view: RoomView; now: () => number; run: (a: Record<string, unknown>) => void }) {
   const q = view.question!;
   const many = q.options.length > 4;
-  if (q.kind === "men")
+  if (q.kind === "men" || q.kind === "likely")
     return (
       <div className="flex-1 flex flex-col">
         <div className="flex justify-between items-baseline">
@@ -545,16 +547,16 @@ function RevealStage({ view, run }: { view: RoomView; run: (a: Record<string, un
     <div className="flex-1 flex flex-col gap-10">
       <div>
         <p className="label mb-3 text-bone/60 truncate">{q.kind === "whoSaid" ? `“${q.prompt}”` : q.prompt}</p>
-        <p className="label mb-2">{q.kind === "men" ? "The room’s choice" : q.kind === "mostLikely" ? "The room has spoken" : q.kind === "honoreeVs" ? "Straight from her" : "The answer"}</p>
+        <p className="label mb-2">{q.kind === "men" ? "The room’s choice" : q.kind === "likely" ? "Most likely" : q.kind === "mostLikely" ? "The room has spoken" : q.kind === "honoreeVs" ? "Straight from her" : "The answer"}</p>
         <h1 className="display text-[clamp(3rem,7vw,7.5rem)] anim-rise">{revealHeadline(view)}</h1>
         {r.surprise && <p className="label text-acid mt-3">Surprise bonus · only a few saw that coming</p>}
         {r.note && <p className="font-serif italic text-2xl text-bone/55 mt-4 anim-rise delay-2">{r.note}</p>}
       </div>
 
-      {q.kind === "men" && q.type === "vote" && <MenResults view={view} />}
+      {(q.kind === "men" || q.kind === "likely") && q.type === "vote" && <MenResults view={view} />}
       {q.type === "kfm" && <KfmTable reveal={r} large />}
 
-      {q.kind !== "men" && q.type === "vote" && (
+      {q.kind !== "men" && q.kind !== "likely" && q.type === "vote" && (
         <div className="max-w-4xl w-full">
           <Bars large rows={voteRows(view).slice(0, 6)} highlight={(i) => r.voteWinners?.includes(voteRows(view)[i].label) ?? false} />
         </div>
@@ -715,7 +717,7 @@ function LeaderboardStage({ view }: { view: RoomView }) {
     const nextTitle = view.round && view.round.index + 1 < view.round.total ? view.roundTitles[view.round.index + 1]?.title : null;
     return (
       <div className="flex-1 flex flex-col justify-center">
-        <p className="label mb-4 anim-rise">Round {ROMAN[view.round?.index ?? 0]} complete</p>
+        <p className="label mb-4 anim-rise">{view.round?.kind === "likely" ? "Bonus game" : `Round ${ROMAN[view.round?.index ?? 0]}`} complete</p>
         <h1 className="display text-[clamp(3rem,7vw,7.5rem)] anim-rise delay-1">
           The scores are <span className="italic text-acid">sealed.</span>
         </h1>
@@ -734,7 +736,7 @@ function LeaderboardStage({ view }: { view: RoomView }) {
   return (
     <div className="flex-1 grid lg:grid-cols-[1.4fr_1fr] gap-16 items-center">
       <div>
-        <p className="label mb-6">After round {ROMAN[view.round?.index ?? 0]}{isLast ? " · that was the last" : ""}</p>
+        <p className="label mb-6">After {view.round?.kind === "likely" ? "the bonus game" : `round ${ROMAN[view.round?.index ?? 0]}`}{isLast ? " · that was the last" : ""}</p>
         {view.teamsEnabled ? <Standings teams={view.teams} large /> : <Ranking players={view.players} large />}
       </div>
       <div>
@@ -790,7 +792,6 @@ function FinalStage({ view, run }: { view: RoomView; run: (a: Record<string, unk
         ) : (
           <Sticker name="cat-smile" className="w-44 mt-6" />
         )}
-        {view.honoree.tagline && <p className="text-bone/50 mt-3">{view.honoree.tagline}</p>}
       </div>
     </div>
   );
@@ -880,25 +881,24 @@ function Slideshow({ view, run }: { view: RoomView; run: (a: Record<string, unkn
     return out;
   }, [view.encore.image, view.messages, photos]);
   const [i, setI] = useState(0);
-  const secs = Math.max(3, view.encore.slideSeconds || 8);
-  useEffect(() => {
-    const t = setTimeout(() => setI((x) => (x + 1) % slides.length), secs * 1000);
-    return () => clearTimeout(t);
-  }, [i, secs, slides.length]);
+  // No timer: the host clicks through at her own pace.
+  const last = slides.length - 1;
+  const next = () => setI((x) => Math.min(last, x + 1));
+  const prev = () => setI((x) => Math.max(0, x - 1));
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight") setI((x) => (x + 1) % slides.length);
-      else if (e.key === "ArrowLeft") setI((x) => (x - 1 + slides.length) % slides.length);
+      if (e.key === "ArrowRight" || e.key === " " || e.key === "Enter") setI((x) => Math.min(slides.length - 1, x + 1));
+      else if (e.key === "ArrowLeft") setI((x) => Math.max(0, x - 1));
       else if (e.key === "Escape") run({ type: "slideshow", on: false });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [slides.length, run]);
-  const s = slides[i % slides.length];
+  const s = slides[Math.min(i, last)];
 
   return (
     <div className="fixed inset-0 z-30 bg-ink flex flex-col">
-      <div key={i} className="flex-1 grid place-items-center px-10 lg:px-24 py-12 anim-fade">
+      <div key={i} className="flex-1 grid place-items-center px-10 lg:px-24 py-12 anim-fade cursor-pointer" onClick={next}>
         {s.kind === "image" && s.photo && (
           <div className="flex flex-col items-center gap-8">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -933,10 +933,18 @@ function Slideshow({ view, run }: { view: RoomView; run: (a: Record<string, unkn
           </div>
         )}
       </div>
-      <div className="flex justify-center gap-2 pb-24">
-        {slides.map((_, k) => (
-          <button key={k} onClick={() => setI(k)} className={`h-2 rounded-full transition-all ${k === i % slides.length ? "w-8 bg-acid" : "w-2 bg-bone/25"}`} aria-label={`Slide ${k + 1}`} />
-        ))}
+      <div className="flex justify-center items-center gap-4 pb-24">
+        <button className="btn-ghost btn-sm disabled:opacity-30" onClick={prev} disabled={i === 0}>
+          ‹ Previous
+        </button>
+        <div className="flex gap-2">
+          {slides.map((_, k) => (
+            <button key={k} onClick={() => setI(k)} className={`h-2 rounded-full transition-all ${k === i ? "w-8 bg-acid" : "w-2 bg-bone/25"}`} aria-label={`Slide ${k + 1}`} />
+          ))}
+        </div>
+        <button className="btn-acid btn-sm disabled:opacity-30" onClick={next} disabled={i === last}>
+          Next ›
+        </button>
       </div>
     </div>
   );
@@ -960,7 +968,7 @@ function Dock({
     lobby: "Start the game",
     round_intro: view.round?.qCount ? "Begin round" : "Next round",
     wager: "Lock wagers · show question",
-    question: view.question?.kind === "men" ? "Close voting" : "Reveal now",
+    question: view.question?.kind === "men" || view.question?.kind === "likely" ? "Close voting" : "Reveal now",
     reveal: "Next",
     unmask: !view.unmask ? "Next" : view.unmask.step === 0 ? "Unmask the first" : view.unmask.step < view.unmask.total ? "Unmask the next" : view.unmask.step === view.unmask.total ? "Show them all" : "Continue",
     leaderboard: view.round && view.round.index + 1 < view.round.total ? "Next round" : "Reveal the final scores",
@@ -1022,6 +1030,32 @@ function Dock({
         <button className="btn-ghost btn-sm" onClick={() => setMore(!more)}>
           {more ? "Fewer" : "More"}
         </button>
+        <select
+          className="btn-ghost btn-sm bg-transparent cursor-pointer w-36"
+          value=""
+          onChange={(e) => {
+            if (e.target.value === "bonus") run({ type: "bonusGame" });
+            else {
+              const v = Number(e.target.value);
+              if (e.target.value !== "" && !Number.isNaN(v)) run({ type: "jump", round: v });
+            }
+            if (welcome) setWelcome(false);
+          }}
+          title="Jump straight to a round or the final scores"
+        >
+          <option value="">Jump to…</option>
+          {view.roundTitles.map((t, k) => (
+            <option key={k} value={k} className="text-ink">
+              {t.kind === "likely" ? "Bonus" : `Round ${k + 1}`}: {t.title}
+            </option>
+          ))}
+          <option value={view.roundTitles.length} className="text-ink">
+            Final scores and slideshow
+          </option>
+          <option value="bonus" className="text-ink">
+            Bonus game: MOST LIKELY TO...
+          </option>
+        </select>
         {view.phase === "lobby" && !welcome && (
           <button className="btn-ghost btn-sm" onClick={() => setWelcome(true)} title="Back to the welcome screen">
             ‹ Back
@@ -1064,6 +1098,9 @@ function Dock({
                     Messages for {view.honoree.name}
                   </button>
                 )}
+                <button className="btn-ghost btn-sm" onClick={() => run({ type: "bonusGame" })}>
+                  Most likely to…
+                </button>
                 {view.encore.extraRound && (
                   <button className="btn-ghost btn-sm" onClick={() => run({ type: "extraRound" })}>
                     Extra round

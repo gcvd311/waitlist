@@ -121,12 +121,12 @@ function RoundHeader({ view }: { view: RoomView }) {
   return (
     <div className="text-center pb-6 px-2">
       <p className="font-mono font-semibold uppercase tracking-label text-[15px] leading-tight">
-        {q?.kind === "tiebreak" ? "Tie-breaker" : `Round ${r.index + 1} / ${r.total}`}
+        {q?.kind === "tiebreak" ? "Tie-breaker" : r.kind === "likely" ? "Bonus game" : `Round ${r.index + 1} / ${r.total}`}
       </p>
       {q?.kind !== "tiebreak" && (
         <p className="font-mono font-semibold uppercase text-[17px] leading-tight">
           {r.title}
-          {view.phase === "reveal" && q?.kind === "men" ? " · Results" : ""}
+          {view.phase === "reveal" && (q?.kind === "men" || q?.kind === "likely") ? " · Results" : ""}
         </p>
       )}
       {q?.kind !== "tiebreak" && (
@@ -134,7 +134,7 @@ function RoundHeader({ view }: { view: RoomView }) {
           {q?.bonus ? "Bonus question" : `Question ${Math.max(1, r.qIndex + 1)} / ${r.qCount}`}
         </p>
       )}
-      <div className="flex items-center gap-3 mt-3">
+      <div className={`flex items-center gap-3 mt-3 ${r.kind === "likely" ? "hidden" : ""}`}>
         <div className="flex-1 h-3 rounded-full bg-wine/80 overflow-hidden ring-1 ring-bone/20">
           <div className="h-full rounded-full bg-acid transition-[width] duration-700" style={{ width: `${pct}%` }} />
         </div>
@@ -195,7 +195,7 @@ function PlayerPhase({
     case "leaderboard":
       return view.scoresHidden ? (
         <div className="flex-1 flex flex-col justify-center gap-6">
-          <p className="label anim-rise">Round {ROMAN[view.round?.index ?? 0]} complete</p>
+          <p className="label anim-rise">{view.round?.kind === "likely" ? "Bonus game" : `Round ${ROMAN[view.round?.index ?? 0]}`} complete</p>
           <h1 className="display text-5xl anim-rise delay-1">
             The scores are <span className="italic">sealed.</span>
           </h1>
@@ -203,7 +203,7 @@ function PlayerPhase({
         </div>
       ) : (
         <div className="flex-1 flex flex-col justify-center gap-10">
-          <p className="label anim-rise">After round {ROMAN[view.round?.index ?? 0]}</p>
+          <p className="label anim-rise">After {view.round?.kind === "likely" ? "the bonus game" : `round ${ROMAN[view.round?.index ?? 0]}`}</p>
           {view.teamsEnabled ? <Standings teams={view.teams} /> : <Ranking players={view.players} highlight={view.me!.id} />}
         </div>
       );
@@ -412,7 +412,7 @@ function Question({ view, act, now, setToast }: { view: RoomView; act: ActFn; no
   const header = (
     <>
       <div className="flex justify-between items-baseline mb-2">
-        <span className="label truncate">{q.category ?? (q.kind === "men" ? "Votes are anonymous" : "")}</span>
+        <span className="label truncate">{q.category ?? (q.kind === "men" || q.kind === "likely" ? "Votes are anonymous" : "")}</span>
         <span className="text-2xl">
           <Timer variant="number" deadline={view.deadline} total={q.timerSec} now={now} paused={view.paused} pausedRemaining={view.pausedRemaining} onExpire={() => act({ type: "timeout" })} />
         </span>
@@ -461,7 +461,7 @@ function Question({ view, act, now, setToast }: { view: RoomView; act: ActFn; no
         )}
       </div>
 
-      {q.kind === "men" && q.type === "vote" && (
+      {(q.kind === "men" || q.kind === "likely") && q.type === "vote" && (
         <div className="mt-auto">
           <Lineup view={view} chosen={typeof chosen === "number" ? chosen : null} onPick={(i) => submit(i)} disabled={inflight} />
         </div>
@@ -469,7 +469,7 @@ function Question({ view, act, now, setToast }: { view: RoomView; act: ActFn; no
 
       {q.type === "kfm" && <KfmPicker view={view} locked={locked} answer={me.answer as string | null} onSubmit={(v) => submit(v)} />}
 
-      {q.kind !== "men" && (q.type === "mc" || q.type === "vote") && (
+      {q.kind !== "men" && q.kind !== "likely" && (q.type === "mc" || q.type === "vote") && (
         <div className="space-y-2 mt-auto">
           {q.options.map((opt, i) => {
             const active = chosen === i;
@@ -548,7 +548,7 @@ function Reveal({ view }: { view: RoomView }) {
   const mine = r.results.find((x) => x.playerId === me.id);
   const team = r.teamResults.find((t) => t.teamId === me.team);
   const verdict =
-    me.role !== "guess" || q.kind === "men" || q.kind === "mostLikely"
+    me.role !== "guess" || q.kind === "men" || q.kind === "mostLikely" || q.kind === "likely"
       ? null
       : !mine || mine.value === null
         ? "No answer."
@@ -572,12 +572,12 @@ function Reveal({ view }: { view: RoomView }) {
         </p>
       )}
       <div className={`anim-rise delay-2 ${q.kind === "men" && q.type === "vote" ? "hidden" : ""}`}>
-        <p className="label mb-2">{q.kind === "men" ? "The room’s choice" : q.kind === "mostLikely" ? "The room has spoken" : "The answer"}</p>
+        <p className="label mb-2">{q.kind === "men" ? "The room’s choice" : q.kind === "likely" ? "Most likely" : q.kind === "mostLikely" ? "The room has spoken" : "The answer"}</p>
         <p className="display text-4xl">{revealHeadline(view)}</p>
         {r.note && <p className="mt-3 text-bone/55 font-serif italic text-xl">{r.note}</p>}
       </div>
-      {q.kind === "men" && q.type === "vote" && <PhoneMenWinner view={view} />}
-      {q.kind !== "men" && q.type === "vote" && (
+      {(q.kind === "men" || q.kind === "likely") && q.type === "vote" && <PhoneMenWinner view={view} />}
+      {q.kind !== "men" && q.kind !== "likely" && q.type === "vote" && (
         <div className="anim-rise delay-3">
           <Bars rows={voteRows(view)} highlight={(i) => r.voteWinners?.includes(voteRows(view)[i].label) ?? false} />
         </div>

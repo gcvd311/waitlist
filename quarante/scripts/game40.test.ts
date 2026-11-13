@@ -233,3 +233,70 @@ console.log(`game40 (incl. back, kfm): ${pass} checks passed`);
   ok(se.rounds.length === 1, "play again drops the encore round");
 }
 console.log(`game40 (incl. encore): ${pass} checks passed`);
+
+// Host can jump between rounds and straight to the final
+{
+  const c = structuredClone(content);
+  const sj = createRoomState("JUMP", c, now());
+  joinRoom(sj, "", { now: now(), isOnline: () => true, profileId: c.players[1].id });
+  applyHostAction(sj, { type: "start" }, now());
+  applyHostAction(sj, { type: "next" }, now());
+  ok(phase(sj) === "question", "a question is open");
+  applyHostAction(sj, { type: "jump", round: 2 }, now());
+  ok(sj.roundIndex === 2 && phase(sj) === "round_intro", "jump to round 3");
+  applyHostAction(sj, { type: "jump", round: 0 }, now());
+  ok(sj.roundIndex === 0 && phase(sj) === "round_intro", "jump back to round 1");
+  applyHostAction(sj, { type: "jump", round: 99 }, now());
+  ok(phase(sj) === "final", "jump to the final scores");
+  applyHostAction(sj, { type: "slideshow", on: true }, now());
+  ok(sj.slideshow, "slideshow from the final");
+}
+console.log(`game40 (incl. jump): ${pass} checks passed`);
+
+// Bonus game: MOST LIKELY TO...
+{
+  const c = mergeContent(structuredClone(content));
+  ok(c.questions.likely.length === 20, "twenty bonus questions to start");
+  ok(!createRoomState("X", c, now()).rounds.some((r) => r.kind === "likely"), "the bonus game is not part of the 40");
+  const sb = createRoomState("LIKE", c, now());
+  const ids: string[] = c.players.map((pr) => joinRoom(sb, "", { now: now(), isOnline: () => true, profileId: pr.id }).id);
+  applyHostAction(sb, { type: "start" }, now()); // round 1 intro
+  applyHostAction(sb, { type: "bonusGame" }, now());
+  ok(sb.roundIndex === 0 && sb.rounds[0].kind === "likely" && sb.rounds[1].kind === "knowHer", "launched before a round starts, it plays first and the game carries on");
+  applyHostAction(sb, { type: "next" }, now());
+  const q1 = sb.current!;
+  ok(q1.kind === "likely" && q1.options.length === 6 && q1.optionPhotos!.every(Boolean), "six portraits with names");
+  ok(q1.options.includes("Crystal") && q1.options.includes("Bea"), "real names");
+  const v = buildView(sb, { role: "player", pid: ids[1] }, now(), new Set(ids));
+  ok(v.question!.options.join() === q1.options.join(), "same order on every phone");
+  // Bea gets 3, Cleo 2, Dora 1
+  const at = (n: string) => q1.options.indexOf(n);
+  const votes = ["Bea", "Bea", "Bea", "Cleo", "Cleo", "Dora"];
+  ids.slice(0, 5).forEach((pid, k) => applyPlayerAction(sb, pid, { type: "answer", key: q1.key, value: at(votes[k]) }, now()));
+  ok(phase(sb) === "question", "waits until everyone has voted");
+  applyPlayerAction(sb, ids[5], { type: "answer", key: q1.key, value: at(votes[5]) }, now());
+  ok(phase(sb) === "reveal", "reveals once everyone has voted");
+  ok(sb.awards[q1.key][ids[1]] === 10 && Object.keys(sb.awards[q1.key]).length === 1, "most votes earns 10");
+  const rv = buildView(sb, { role: "host" }, now(), new Set(ids));
+  ok(rv.reveal!.distribution[at("Bea")] === 3 && rv.reveal!.distribution[at("Cleo")] === 2, "vote counts shown");
+  applyHostAction(sb, { type: "next" }, now());
+  const q2 = sb.current!;
+  ok(q2.options.join() !== q1.options.join() || q2.options.length < 3, "portraits reshuffle between questions");
+  const t = (n: string) => q2.options.indexOf(n);
+  ["Crystal", "Crystal", "Eva", "Eva", "Flo"].forEach((n, k) => applyPlayerAction(sb, ids[k], { type: "answer", key: q2.key, value: t(n) }, now()));
+  applyHostAction(sb, { type: "next" }, now()); // host closes voting
+  ok(phase(sb) === "reveal" && sb.awards[q2.key][ids[0]] === 10 && sb.awards[q2.key][ids[4]] === 10, "a tie at the top pays each tied player 10");
+  const before = playerScore(sb, ids[1]);
+  ok(before >= 10, "points go straight onto the leaderboard");
+  let g = 0;
+  while (sb.roundIndex === 0 && g++ < 40) applyHostAction(sb, { type: "next" }, now());
+  ok(sb.rounds[sb.roundIndex].kind === "knowHer", "after the bonus game, the main game resumes");
+  const vv = buildView(sb, { role: "host" }, now(), new Set(ids));
+  ok(vv.progress.total === 40, "the 40 still counts 40");
+  applyHostAction(sb, { type: "jump", round: 99 }, now());
+  applyHostAction(sb, { type: "bonusGame" }, now());
+  ok(phase(sb) === "round_intro" && sb.rounds[sb.roundIndex].kind === "likely", "can also be launched from the final screen");
+  applyHostAction(sb, { type: "backToLobby" }, now());
+  ok(!sb.rounds.some((r) => r.kind === "likely"), "play again drops it");
+}
+console.log(`game40 (incl. bonus game): ${pass} checks passed`);

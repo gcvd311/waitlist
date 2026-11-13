@@ -76,6 +76,32 @@ function Dashboard() {
     });
   }, []);
 
+  // Coming back to this tab (after editing on another device): pick up the latest saved version first,
+  // so this tab never saves an older copy over newer edits.
+  const stateRef = useRef(saveState);
+  stateRef.current = saveState;
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState !== "visible" || stateRef.current !== "saved") return;
+      api<{ content: Content; backend: string }>("/api/content")
+        .then((r) => {
+          if (stateRef.current !== "saved") return; // an edit started meanwhile: keep it
+          setContent((cur) => {
+            if (cur && cur.updatedAt === r.content.updatedAt) return cur;
+            first.current = true; // loading, not editing: don't save it back
+            return r.content;
+          });
+        })
+        .catch(() => {});
+    };
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, []);
+
   // Autosave, debounced.
   useEffect(() => {
     if (!content) return;
@@ -244,8 +270,12 @@ function PlayTab({ content, setContent, saveState }: { content: Content; setCont
 
       <Section title="Readiness">
         <ul className="divide-y divide-bone/10 border-y border-bone/10">
-          <Check ok={content.honoree.name !== DEFAULT_CONTENT.honoree.name} label="Her name" detail={content.honoree.name} />
-          <Check ok={content.honoree.photos.length > 0} label="Photographs" detail={`${content.honoree.photos.length} uploaded`} />
+          <Check ok={!!content.honoree.name.trim()} label="Her name" detail={content.honoree.name || "Add it in the Her tab"} />
+          <Check
+            ok
+            label="Her photographs (optional)"
+            detail={content.honoree.photos.length ? `${content.honoree.photos.length} uploaded` : "None yet. They decorate round openings and fill in slideshow messages that have no photo."}
+          />
           <Check ok={girls.length >= 2 && girls.every((g) => g.photo)} label="Players’ portraits" detail={`${girls.filter((g) => g.photo).length} of ${girls.length} uploaded`} />
           <Check
             ok={girls.length >= 2 && girls.every((g) => g.malePhotos.length && g.maleName.trim())}
@@ -331,15 +361,9 @@ function HerTab({ content, update }: { content: Content; update: Update }) {
   return (
     <div>
       <Section title="The birthday girl" hint="Her name fills every {name} in the questions.">
-        <div className="grid sm:grid-cols-2 gap-6">
-          <div>
-            <label className="label block mb-1">Name</label>
-            <input className="field font-serif text-3xl" value={h.name} onChange={(e) => update((c) => void (c.honoree.name = e.target.value))} />
-          </div>
-          <div>
-            <label className="label block mb-1">Line for the final screen</label>
-            <input className="field" value={h.tagline} onChange={(e) => update((c) => void (c.honoree.tagline = e.target.value))} />
-          </div>
+        <div className="max-w-md">
+          <label className="label block mb-1">Name</label>
+          <input className="field font-serif text-3xl" value={h.name} onChange={(e) => update((c) => void (c.honoree.name = e.target.value))} />
         </div>
       </Section>
 
@@ -622,11 +646,12 @@ function HerLogin({ content, update }: { content: Content; update: Update }) {
 
 // ───────────────────────── Questions ─────────────────────────
 
-const SETS: { id: QSet | "mostLikely"; label: string; hint: string; extra?: boolean }[] = [
+const SETS: { id: QSet | "mostLikely" | "likely"; label: string; hint: string; extra?: boolean }[] = [
   { id: "knowHer", label: "I · Crystal Clear?", hint: "Questions about {name}. She can give her real answers on her own page, or you type them here. Add a photo to make a picture question. Free text is auto-marked leniently and you can overrule it on the reveal." },
   { id: "past40", label: "II · The Past 40 Years", hint: "1986 to 2026, played in this order. Switch on the ones you want; the rest wait in the bank. Edit any question or add your own." },
   { id: "men", label: "III · The Men", hint: "Everyone votes for one man per question; the girl behind the most-voted man gets the points. Open a question to choose which of the three men appear. Photos and names are on the Players & portraits page." },
   { id: "finale", label: "IV · No Further Questions", hint: "A mix: Who Said That? slots (filled from the confessions), stories where the options are the girls, questions about {name}, and the final question." },
+  { id: "likely", label: "Bonus · MOST LIKELY TO...", hint: "A bonus game, separate from the 40. Everyone votes on the girls’ portraits; whoever gets the most votes earns the points (a tie pays everyone tied). Start it from the host controls: Jump to… or the final screen. Every question here is played, in this order." },
   { id: "trivia", label: "General trivia", hint: "For the optional General Trivia round. Each game picks a random set at the difficulty you choose.", extra: true },
   { id: "honoreeVs", label: "Her vs. Everyone", hint: "For the optional Her vs. Everyone round.", extra: true },
   { id: "mostLikely", label: "Most Likely To", hint: "For the optional Most Likely To round.", extra: true },
@@ -635,7 +660,7 @@ const SETS: { id: QSet | "mostLikely"; label: string; hint: string; extra?: bool
 ];
 
 function QuestionsTab({ content, update }: { content: Content; update: Update }) {
-  const [set, setSet] = useState<QSet | "mostLikely">("knowHer");
+  const [set, setSet] = useState<QSet | "mostLikely" | "likely">("knowHer");
   const meta = SETS.find((s) => s.id === set)!;
   return (
     <div>
@@ -646,7 +671,7 @@ function QuestionsTab({ content, update }: { content: Content; update: Update })
           <button key={s.id} onClick={() => setSet(s.id)} className={`btn-sm border ${set === s.id ? "border-acid text-acid" : "border-bone/20 text-bone/60 hover:text-bone"}`}>
             {s.label}
             <span className="font-mono text-xs ml-2 opacity-60">
-              {s.id === "mostLikely" ? content.questions.mostLikely.length : (content.questions[s.id as QSet] ?? []).filter((q) => !q.off).length}
+              {s.id === "mostLikely" || s.id === "likely" ? content.questions[s.id].length : (content.questions[s.id as QSet] ?? []).filter((q) => !q.off).length}
             </span>
           </button>
           </span>
@@ -672,8 +697,44 @@ function QuestionsTab({ content, update }: { content: Content; update: Update })
           ))}
         </div>
       )}
-      {set === "mostLikely" ? <MostLikelyEditor content={content} update={update} hint={meta.hint} /> : <QuestionList set={set} content={content} update={update} title={meta.label.replace(/^[IV]+ · /, "")} hint={meta.hint.replace(/\{name\}/g, content.honoree.name)} />}
+      {set === "likely" ? <BonusGameEditor content={content} update={update} hint={meta.hint} /> : set === "mostLikely" ? <MostLikelyEditor content={content} update={update} hint={meta.hint} /> : <QuestionList set={set} content={content} update={update} title={meta.label.replace(/^[IV]+ · /, "")} hint={meta.hint.replace(/\{name\}/g, content.honoree.name)} />}
     </div>
+  );
+}
+
+function BonusGameEditor({ content, update, hint }: { content: Content; update: Update; hint: string }) {
+  const list = content.questions.likely ?? [];
+  const ri = content.rounds.findIndex((r) => r.kind === "likely");
+  const r = content.rounds[ri];
+  return (
+    <Section
+      title="MOST LIKELY TO..."
+      hint={hint}
+      action={
+        <button className="btn-ghost btn-sm" onClick={() => update((c) => void (c.questions.likely = [...(c.questions.likely ?? []), { id: uid(6), prompt: "Who’s most likely to " }]))}>
+          Add
+        </button>
+      }
+    >
+      {r && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6 max-w-xl">
+          <Num label="Points for the most votes" value={r.points} onChange={(v) => update((c) => void (c.rounds[ri].points = v))} />
+          <Num label="Timer (sec, 0 = you close it)" value={r.timerSec} onChange={(v) => update((c) => void (c.rounds[ri].timerSec = v))} />
+        </div>
+      )}
+      <div className="space-y-2">
+        {list.map((q, i) => (
+          <div key={q.id} className="flex gap-2 items-center">
+            <span className="font-mono text-xs text-bone/40 w-6 text-right">{i + 1}</span>
+            <input className="box" value={q.prompt} onChange={(e) => update((c) => void (c.questions.likely[i].prompt = e.target.value))} />
+            <button className="label hover:text-rouge" onClick={() => update((c) => void c.questions.likely.splice(i, 1))}>
+              Delete
+            </button>
+          </div>
+        ))}
+        {!list.length && <p className="text-bone/45 font-serif italic text-xl">No questions yet. Add one.</p>}
+      </div>
+    </Section>
   );
 }
 
@@ -1230,6 +1291,7 @@ const KIND_LABEL: Record<RoundKind, string> = {
   trivia: "General trivia",
   whoSaid: "Confessions",
   mostLikely: "Anonymous vote",
+  likely: "Bonus game: vote on the girls",
   honoreeVs: "She answers, they predict",
   final40: "Wagers",
 };
@@ -1242,7 +1304,7 @@ function RoundsTab({ content, update }: { content: Content; update: Update }) {
         hint={`The default game is four rounds of ten: ${content.rounds.filter((r) => r.enabled).reduce((n, r) => n + r.count, 0)} questions with the current settings, plus any bonus questions. Optional rounds sit below, switched off. Timer 0 means no clock: the host closes each question.`}
       >
         <div className="space-y-4">
-          {content.rounds.map((r, i) => (
+          {content.rounds.map((r, i) => r.kind === "likely" ? null : (
             <div key={r.kind} className={`border border-bone/15 p-4 ${r.enabled ? "" : "opacity-50"}`}>
               <div className="flex items-center gap-3 mb-3">
                 <input type="checkbox" className="accent-acid w-4 h-4" checked={r.enabled} onChange={(e) => update((c) => void (c.rounds[i].enabled = e.target.checked))} />
@@ -1374,13 +1436,8 @@ function EncoreSection({ content, update }: { content: Content; update: Update }
           on={e.slideshow}
           set={(v) => set((x) => void (x.slideshow = v))}
           label={`Messages slideshow for ${content.honoree.name}`}
-          hint={`Your friends’ messages, one at a time, full screen. ${content.messages.length} written so far, in the Friends tab.`}
+          hint={`Your friends’ messages, one at a time, full screen. No timer: click, or press the right arrow, for the next one. ${content.messages.length} written so far, in the Friends tab.`}
         />
-        {e.slideshow && (
-          <div className="ml-7 max-w-[12rem]">
-            <Num label="Seconds per slide" value={e.slideSeconds} onChange={(v) => set((x) => void (x.slideSeconds = Math.max(3, v)))} />
-          </div>
-        )}
 
         <Toggle
           on={e.tiebreaker}
