@@ -6,6 +6,7 @@ import { useRoom } from "@/hooks/useRoom";
 import { sfx } from "@/lib/sound";
 import { Avatar, Mascot, MuteButton, PhotoPicker, Portrait, Sticker, Timer, Toast, TitleLockup } from "@/components/ui";
 import { Sparkle } from "@/components/Cat";
+import { AwardsPodium, AwardsTitle, Evidence, FullRankings } from "@/components/Awards";
 import { Bars, KfmTable, Lineup, OptionLetter, Ranking, revealHeadline, Standings, voteRows } from "@/components/game";
 import HostRemote from "@/components/HostRemote";
 import type { RoomView } from "@/lib/types";
@@ -192,6 +193,8 @@ function PlayerPhase({
       return <Reveal view={view} />;
     case "unmask":
       return <PhoneUnmask view={view} />;
+    case "awards":
+      return <PhoneAwards view={view} />;
     case "leaderboard":
       return view.scoresHidden ? (
         <div className="flex-1 flex flex-col justify-center gap-6">
@@ -586,6 +589,31 @@ function Reveal({ view }: { view: RoomView }) {
       {mine && mine.value !== null && q.type !== "vote" && q.type !== "kfm" && (
         <p className="text-bone/50 text-sm">You said: <span className="font-serif italic text-lg text-bone/80">{mine.display}</span></p>
       )}
+    </div>
+  );
+}
+
+function PhoneAwards({ view }: { view: RoomView }) {
+  const a = view.awards;
+  const [local, setLocal] = useState<"evidence" | "rankings" | null | undefined>(undefined);
+  if (!a) return null;
+  const panel = local === undefined ? a.panel : local;
+  return (
+    <div className="flex-1 flex flex-col gap-6">
+      <AwardsTitle step={a.step} />
+      <AwardsPodium awards={a} />
+      {a.step >= 3 && (
+        <div className="flex justify-center gap-2 anim-fade">
+          <button className="btn-ghost btn-sm" onClick={() => setLocal(panel === "evidence" ? null : "evidence")}>
+            The evidence {panel === "evidence" ? "▴" : "▾"}
+          </button>
+          <button className="btn-ghost btn-sm" onClick={() => setLocal(panel === "rankings" ? null : "rankings")}>
+            Full rankings
+          </button>
+        </div>
+      )}
+      {a.step >= 3 && panel === "evidence" && <Evidence awards={a} />}
+      {a.step >= 3 && panel === "rankings" && <FullRankings awards={a} />}
     </div>
   );
 }

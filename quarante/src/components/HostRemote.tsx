@@ -15,7 +15,7 @@ export default function HostRemote({ code, hostToken, view }: { code: string; ho
       setMsg((e as Error).message);
     }
   };
-  const nextLabel = { lobby: "Start", round_intro: "Begin", wager: "Lock wagers", question: view.question?.kind === "men" ? "Close voting" : "Reveal", reveal: "Next", unmask: "Unmask", leaderboard: "Next round", final: "" }[view.phase];
+  const nextLabel = { lobby: "Start", round_intro: "Begin", wager: "Lock wagers", question: view.question?.kind === "men" ? "Close voting" : "Reveal", reveal: "Next", awards: view.awards && view.awards.step < 3 ? "Next reveal" : "Continue", unmask: "Unmask", leaderboard: "Next round", final: "" }[view.phase];
   return (
     <div className="fixed bottom-0 inset-x-0 z-30 bg-wine/95 backdrop-blur border-t border-bone/10">
       <div className="max-w-md mx-auto px-4 py-3 flex items-center gap-2">

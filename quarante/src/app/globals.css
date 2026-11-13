@@ -163,3 +163,22 @@ input[type="range"] { accent-color: rgb(var(--c-acid)); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
 }
+
+/* GUILTY AS CHARGED */
+@keyframes crownDrop {
+  0% { opacity: 0; transform: translate(-50%, -60px) rotate(-18deg); }
+  60% { opacity: 1; transform: translate(-50%, 6px) rotate(-4deg); }
+  100% { opacity: 1; transform: translate(-50%, 0) rotate(-6deg); }
+}
+@keyframes coronate {
+  0% { opacity: 0; transform: translateY(26px) scale(0.86); filter: blur(10px) brightness(1.8); }
+  70% { opacity: 1; transform: translateY(-4px) scale(1.03); filter: none; }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes halo { 0%, 100% { opacity: 0.35; transform: scale(0.96); } 50% { opacity: 0.7; transform: scale(1.04); } }
+.anim-crown { animation: crownDrop 0.9s cubic-bezier(0.2, 0.7, 0.1, 1) 0.9s both; }
+.anim-coronate { animation: coronate 1.3s cubic-bezier(0.2, 0.7, 0.1, 1) both; }
+.anim-halo { animation: halo 3.2s ease-in-out infinite; }
+.metal-gold { background: linear-gradient(135deg, #8a6416 0%, #f6d77a 28%, #c99a2e 50%, #fff1b8 66%, #b8861f 100%); }
+.metal-silver { background: linear-gradient(135deg, #6f737c 0%, #eef0f4 30%, #a9adb6 52%, #ffffff 66%, #8b9099 100%); }
+.metal-bronze { background: linear-gradient(135deg, #6b3a14 0%, #e2a26a 30%, #a8642e 52%, #f3c49a 66%, #7c4419 100%); }

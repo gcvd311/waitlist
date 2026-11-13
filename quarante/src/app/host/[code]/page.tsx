@@ -6,6 +6,7 @@ import { useRoom } from "@/hooks/useRoom";
 import { sfx } from "@/lib/sound";
 import { Avatar, Mascot, MuteButton, Portrait, PromptText, QR, Sticker, TeamDot, Timer, TitleLockup, Toast, Wordmark } from "@/components/ui";
 import { Sparkle } from "@/components/Cat";
+import { AwardsPodium, AwardsTitle, Evidence, FullRankings } from "@/components/Awards";
 import { Bars, KfmTable, Lineup, Ranking, screenGrid, revealHeadline, RevealResultList, Standings, TopPlayers, voteRows } from "@/components/game";
 import type { RoomView } from "@/lib/types";
 
@@ -137,7 +138,7 @@ export default function HostPage({ params }: { params: { code: string } }) {
 
       <section
         className={`flex-1 flex flex-col ${
-          view.phase === "lobby" || view.phase === "round_intro" ? "px-6 lg:px-12 py-4" : "card relative mx-6 lg:mx-12 mb-5 px-8 lg:px-14 py-8"
+          view.phase === "lobby" || view.phase === "round_intro" || view.phase === "awards" ? "px-6 lg:px-12 py-4" : "card relative mx-6 lg:mx-12 mb-5 px-8 lg:px-14 py-8"
         }`}
         key={`${onWelcome ? "welcome" : view.phase}-${view.question?.key ?? view.round?.index ?? ""}`}
       >
@@ -187,13 +188,14 @@ function useHostSounds(view: RoomView | null) {
   const last = useRef("");
   useEffect(() => {
     if (!view) return;
-    const sig = `${view.phase}:${view.question?.key ?? ""}:${view.round?.index ?? ""}`;
+    const sig = `${view.phase}:${view.question?.key ?? ""}:${view.round?.index ?? ""}:${view.awards?.step ?? ""}`;
     if (sig === last.current) return;
     const first = !last.current;
     last.current = sig;
     if (first) return;
     if (view.phase === "round_intro") sfx.round();
     else if (view.phase === "reveal") sfx.reveal();
+    else if (view.phase === "awards") (view.awards?.step === 3 ? sfx.finale() : sfx.reveal());
     else if (view.phase === "final") sfx.finale();
     else if (view.phase === "question") sfx.tap();
   }, [view]);
@@ -213,6 +215,8 @@ function Stage({ view, run, now }: { view: RoomView; run: Act | ((a: Record<stri
       return <RevealStage view={view} run={run} />;
     case "unmask":
       return <UnmaskStage view={view} />;
+    case "awards":
+      return <AwardsStage view={view} run={run} />;
     case "leaderboard":
       return <LeaderboardStage view={view} />;
     case "final":
@@ -256,6 +260,38 @@ function Hero({ view }: { view: RoomView }) {
         <br />
         We have questions.
       </p>
+    </div>
+  );
+}
+
+/** GUILTY AS CHARGED: the MOST LIKELY TO awards, revealed one step at a time by the host. */
+function AwardsStage({ view, run }: { view: RoomView; run: (a: Record<string, unknown>) => void }) {
+  const a = view.awards;
+  if (!a) return null;
+  const panel = a.panel;
+  return (
+    <div className="flex-1 relative flex flex-col justify-between gap-6">
+      <AwardsTitle large step={a.step} />
+      <AwardsPodium awards={a} large />
+      <div className={`flex justify-center gap-3 min-h-[2.5rem] ${a.step >= 3 ? "anim-fade" : "invisible"}`} style={{ animationDelay: "1.6s" }}>
+        <button className="btn-ghost btn-sm" onClick={() => run({ type: "awardsPanel", panel: panel === "evidence" ? null : "evidence" })}>
+          The evidence {panel === "evidence" ? "▴" : "▾"}
+        </button>
+        <button className="btn-ghost btn-sm" onClick={() => run({ type: "awardsPanel", panel: panel === "rankings" ? null : "rankings" })}>
+          View full rankings
+        </button>
+      </div>
+      {panel && (
+        <div className="absolute inset-x-0 bottom-14 top-[18%] z-20 card px-10 py-8 overflow-auto anim-rise">
+          <div className="flex items-baseline justify-between mb-6">
+            <p className="font-mono font-bold uppercase text-3xl">{panel === "evidence" ? "The evidence" : "Full rankings"}</p>
+            <button className="label hover:text-acid" onClick={() => run({ type: "awardsPanel", panel: null })}>
+              Close
+            </button>
+          </div>
+          {panel === "evidence" ? <Evidence awards={a} large /> : <FullRankings awards={a} large />}
+        </div>
+      )}
     </div>
   );
 }
@@ -972,6 +1008,7 @@ function Dock({
     question: view.question?.kind === "men" || view.question?.kind === "likely" ? "Close voting" : "Reveal now",
     reveal: "Next",
     unmask: !view.unmask ? "Next" : view.unmask.step === 0 ? "Unmask the first" : view.unmask.step < view.unmask.total ? "Unmask the next" : view.unmask.step === view.unmask.total ? "Show them all" : "Continue",
+    awards: !view.awards ? "Continue" : view.awards.step === 0 ? "Start the reveal" : view.awards.step < 3 ? "Next reveal" : view.round && view.round.index + 1 < view.round.total ? "Continue to the next round" : "Continue",
     leaderboard: view.round && view.round.index + 1 < view.round.total ? "Next round" : "Reveal the final scores",
     final: "",
   };

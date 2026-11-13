@@ -289,7 +289,7 @@ console.log(`game40 (incl. jump): ${pass} checks passed`);
   const before = playerScore(sb, ids[1]);
   ok(before >= 10, "points go straight onto the leaderboard");
   let g = 0;
-  while (sb.roundIndex === 0 && g++ < 40) applyHostAction(sb, { type: "next" }, now());
+  while (sb.roundIndex === 0 && g++ < 80) applyHostAction(sb, { type: "next" }, now());
   ok(sb.rounds[sb.roundIndex].kind === "knowHer", "after the bonus game, the main game resumes");
   const vv = buildView(sb, { role: "host" }, now(), new Set(ids));
   ok(vv.progress.total === 40, "the 40 still counts 40");
@@ -300,3 +300,49 @@ console.log(`game40 (incl. jump): ${pass} checks passed`);
   ok(!sb.rounds.some((r) => r.kind === "likely"), "play again drops it");
 }
 console.log(`game40 (incl. bonus game): ${pass} checks passed`);
+
+// GUILTY AS CHARGED: the awards after the last MOST LIKELY TO question
+{
+  const c = mergeContent(structuredClone(content));
+  c.questions.likely = c.questions.likely.slice(0, 3);
+  const sa = createRoomState("GUILT", c, now());
+  const ids: string[] = c.players.map((pr) => joinRoom(sa, "", { now: now(), isOnline: () => true, profileId: pr.id }).id);
+  const nameOf = (pid: string) => sa.players[pid].name;
+  applyHostAction(sa, { type: "start" }, now());
+  applyHostAction(sa, { type: "bonusGame" }, now());
+  // votes per question, by name: Bea 3+2+1 = 6, Cleo 2+2+2 = 6 (tied gold), Dora 1+1 = 2 (silver), Eva 1 (bronze)
+  const plan = [
+    ["Bea", "Bea", "Bea", "Cleo", "Cleo", "Dora"],
+    ["Bea", "Bea", "Cleo", "Cleo", "Dora", "Eva"],
+    ["Bea", "Cleo", "Cleo", "Crystal", "Crystal", "Flo"],
+  ];
+  for (let qi = 0; qi < 3; qi++) {
+    applyHostAction(sa, { type: "next" }, now()); // open the question
+    const q = sa.current!;
+    plan[qi].forEach((n, k) => applyPlayerAction(sa, ids[k], { type: "answer", key: q.key, value: q.options.indexOf(n) }, now()));
+    ok(phase(sa) === "reveal", `question ${qi + 1} revealed`);
+  }
+  applyHostAction(sa, { type: "next" }, now());
+  ok(phase(sa) === "awards" && sa.awardsStep === 0, "awards follow the last question's results");
+  const v = buildView(sa, { role: "host" }, now(), new Set(ids)).awards!;
+  ok(v.tiers[0].people.map((p) => p.name).sort().join() === "Bea,Cleo" && v.tiers[0].votes === 6, "a tie for gold is shown as a tie");
+  ok(v.tiers[1].votes === 2 && v.tiers[1].people.map((p) => p.name).sort().join() === "Crystal,Dora", "second-highest total takes silver (tied)");
+  ok(v.tiers[2].votes === 1 && v.tiers[2].people.map((p) => p.name).sort().join() === "Eva,Flo", "third-highest takes bronze");
+  const bea = v.ranking.find((p) => p.name === "Bea")!;
+  ok(bea.top[0].votes === 3 && bea.top[0].label === c.questions.likely[0].prompt.replace(/^Who’s most likely to /, "").replace(/\?$/, "").replace(/^./, (x) => x.toUpperCase()), "most accused of comes from her real votes");
+  ok(v.ranking.length === 6 && v.ranking.filter((p) => p.rank === 1).length === 2, "full rankings: everyone, ties share a place");
+  ok(v.ranking.reduce((n, p) => n + p.votes, 0) === 18, "only MOST LIKELY TO votes count");
+  for (const step of [1, 2, 3]) {
+    applyHostAction(sa, { type: "next" }, now());
+    ok(sa.awardsStep === step && phase(sa) === "awards", `host reveals step ${step}`);
+  }
+  applyHostAction(sa, { type: "awardsPanel", panel: "rankings" }, now());
+  ok(buildView(sa, { role: "player", pid: ids[2] }, now(), new Set(ids)).awards!.panel === "rankings", "phones see the panel the host opened");
+  applyHostAction(sa, { type: "back" }, now());
+  ok(sa.awardsStep === 2, "back steps the reveal back");
+  applyHostAction(sa, { type: "next" }, now());
+  applyHostAction(sa, { type: "next" }, now());
+  ok(phase(sa) === "round_intro" && sa.rounds[sa.roundIndex].kind === "knowHer", "continue goes on to the next round");
+  void nameOf;
+}
+console.log(`game40 (incl. awards): ${pass} checks passed`);
