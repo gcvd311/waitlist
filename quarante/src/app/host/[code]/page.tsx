@@ -989,11 +989,27 @@ function Slideshow({ view, run }: { view: RoomView; run: (a: Record<string, unkn
           </div>
         ) : null}
         {s.kind === "end" && (
-          <div className="text-center">
-            <Sticker name="double-hearts" className="w-28 mx-auto mb-6" />
-            <p className="title-face text-[clamp(3rem,8vw,8rem)] -rotate-[3deg] leading-none">Happy 40th,</p>
-            <p className="title-face text-[clamp(3rem,8vw,8rem)] -rotate-[3deg] leading-none mt-2">{view.honoree.name}.</p>
-            <Sticker name="cat-smile" className="w-48 mx-auto mt-8" />
+          <div className="relative text-center px-16">
+            {/* the sparkles, twinkling out of step */}
+            {[
+              ["-left-6 top-6", "w-12", "0s"],
+              ["left-10 top-[42%]", "w-6", "0.9s"],
+              ["-left-2 bottom-24", "w-9", "1.6s"],
+              ["-right-4 top-2", "w-9", "0.4s"],
+              ["right-8 top-[38%]", "w-14", "1.2s"],
+              ["-right-6 bottom-20", "w-7", "2s"],
+              ["left-1/3 -top-4", "w-5", "0.7s"],
+              ["right-1/3 bottom-4", "w-6", "1.8s"],
+            ].map(([pos, size, delay], k) => (
+              <Sparkle key={k} className={`absolute ${pos} ${size} ${k % 3 === 1 ? "text-gold" : "text-bone/85"} anim-pulse`} style={{ animationDelay: delay }} />
+            ))}
+            <Sticker name="double-hearts" className="w-24 mx-auto mb-5" />
+            <p className="title-face text-[clamp(3rem,7.4vw,7.4rem)] -rotate-[3deg] leading-none">Happy 40th,</p>
+            <p className="title-face text-[clamp(3rem,7.4vw,7.4rem)] -rotate-[3deg] leading-none mt-2">{view.honoree.name}.</p>
+            <p className="font-serif italic font-bold text-[clamp(1.8rem,3.4vw,3.4rem)] mt-8 anim-rise" style={{ animationDelay: "0.6s" }}>
+              We love you!
+            </p>
+            <Sticker name="cat-smile" className="w-36 mx-auto mt-6" />
           </div>
         )}
       </div>
