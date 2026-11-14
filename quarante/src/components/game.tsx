@@ -134,6 +134,11 @@ export function screenGrid(n: number, reserved: number, perCell = 1) {
   return { cols, rows, maxWidth };
 }
 
+/** Everyone in a single row: as wide as the screen, as tall as the space left allows. */
+export function oneRow(n: number, reserved: number) {
+  return { cols: n, maxWidth: `calc(${n} * ((100vh - ${reserved}px) - 48px) * 0.8 + ${(n - 1) * 12}px)` };
+}
+
 /** Round 3's lineup: the men, in this question's order, with their photo and name. */
 export function Lineup({
   view,
@@ -150,7 +155,8 @@ export function Lineup({
 }) {
   const q = view.question!;
   const n = q.options.length;
-  const { cols, maxWidth } = large ? screenGrid(n, 360) : { cols: n <= 4 ? 2 : 3, maxWidth: undefined };
+  // On the big screen everyone stands in one row, as large as the screen allows.
+  const { cols, maxWidth } = large ? oneRow(n, 360) : { cols: n <= 4 ? 2 : 3, maxWidth: undefined };
   return (
     <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, maxWidth }}>
       {q.options.map((name, i) => {
