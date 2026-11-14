@@ -602,7 +602,7 @@ function PhoneAwards({ view }: { view: RoomView }) {
     <div className="flex-1 flex flex-col gap-6">
       <AwardsTitle step={a.step} />
       <AwardsPodium awards={a} />
-      {a.step >= 3 && (
+      {a.step >= 1 && (
         <div className="flex justify-center gap-2 anim-fade">
           <button className="btn-ghost btn-sm" onClick={() => setLocal(panel === "evidence" ? null : "evidence")}>
             The evidence {panel === "evidence" ? "▴" : "▾"}
@@ -612,8 +612,8 @@ function PhoneAwards({ view }: { view: RoomView }) {
           </button>
         </div>
       )}
-      {a.step >= 3 && panel === "evidence" && <Evidence awards={a} />}
-      {a.step >= 3 && panel === "rankings" && <FullRankings awards={a} />}
+      {a.step >= 1 && panel === "evidence" && <Evidence awards={a} />}
+      {a.step >= 1 && panel === "rankings" && <FullRankings awards={a} />}
     </div>
   );
 }

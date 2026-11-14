@@ -197,7 +197,7 @@ export interface RoomState {
   unmaskStep: number;
   unmaskOrder: string[]; // tokens, fewest votes first
   slideshow?: boolean; // the messages slideshow is on the big screen
-  awardsStep?: number; // GUILTY AS CHARGED: 0 title, 1 bronze, 2 silver, 3 gold and the full podium
+  awardsStep?: number; // GUILTY AS CHARGED: 0 title, 1 every winner at once
   awardsPanel?: "evidence" | "rankings" | null;
 }
 

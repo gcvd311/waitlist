@@ -344,17 +344,30 @@ console.log(`game40 (incl. bonus game): ${pass} checks passed`);
   ok(bea.top[0].votes === 3 && bea.top[0].label === c.questions.likely[0].prompt.replace(/^Who’s most likely to /, "").replace(/\?$/, "").replace(/^./, (x) => x.toUpperCase()), "most accused of comes from her real votes");
   ok(v.ranking.length === 6 && v.ranking.filter((p) => p.rank === 1).length === 2, "full rankings: everyone, ties share a place");
   ok(v.ranking.reduce((n, p) => n + p.votes, 0) === 18, "only MOST LIKELY TO votes count");
-  for (const step of [1, 2, 3]) {
-    applyHostAction(sa, { type: "next" }, now());
-    ok(sa.awardsStep === step && phase(sa) === "awards", `host reveals step ${step}`);
-  }
+  applyHostAction(sa, { type: "next" }, now());
+  ok(sa.awardsStep === 1 && phase(sa) === "awards", "one tap reveals every winner at once");
   applyHostAction(sa, { type: "awardsPanel", panel: "rankings" }, now());
   ok(buildView(sa, { role: "player", pid: ids[2] }, now(), new Set(ids)).awards!.panel === "rankings", "phones see the panel the host opened");
   applyHostAction(sa, { type: "back" }, now());
-  ok(sa.awardsStep === 2, "back steps the reveal back");
+  ok(sa.awardsStep === 0, "back hides the verdicts again");
   applyHostAction(sa, { type: "next" }, now());
   applyHostAction(sa, { type: "next" }, now());
   ok(phase(sa) === "round_intro" && sa.rounds[sa.roundIndex].kind === "knowHer", "continue goes on to the next round");
   void nameOf;
+}
+{
+  // Three level at the top: they all take gold, and there is no silver or bronze.
+  const c = mergeContent(structuredClone(content));
+  c.questions.likely = c.questions.likely.slice(0, 1);
+  const st = createRoomState("TIE3", c, now());
+  const ids: string[] = c.players.map((pr) => joinRoom(st, "", { now: now(), isOnline: () => true, profileId: pr.id }).id);
+  applyHostAction(st, { type: "start" }, now());
+  applyHostAction(st, { type: "jump", round: st.rounds.findIndex((r) => r.kind === "likely") }, now());
+  applyHostAction(st, { type: "next" }, now());
+  const q = st.current!;
+  ["Bea", "Bea", "Cleo", "Cleo", "Dora", "Dora"].forEach((n, k) => applyPlayerAction(st, ids[k], { type: "answer", key: q.key, value: q.options.indexOf(n) }, now()));
+  applyHostAction(st, { type: "next" }, now());
+  const aw = buildView(st, { role: "host" }, now(), new Set(ids)).awards!;
+  ok(aw.tiers.length === 1 && aw.tiers[0].people.length === 3 && aw.tiers[0].place === 1, "a three-way tie shares gold, with no silver or bronze");
 }
 console.log(`game40 (incl. awards): ${pass} checks passed`);
