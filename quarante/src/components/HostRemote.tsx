@@ -33,6 +33,11 @@ export default function HostRemote({ code, hostToken, view }: { code: string; ho
             <button className="btn-ghost btn-sm" onClick={() => send({ type: "skip" })}>
               Skip
             </button>
+            {view.canUnmask && (
+              <button className="btn-ghost btn-sm" onClick={() => confirm("Reveal which girl each man really is, on the big screen?") && send({ type: "unmask" })}>
+                Reveal men
+              </button>
+            )}
           </>
         )}
         <button className="btn-ghost btn-sm" onClick={() => setOpen(!open)}>

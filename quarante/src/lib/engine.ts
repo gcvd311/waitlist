@@ -590,6 +590,22 @@ function startUnmask(state: RoomState) {
   state.phase = "unmask";
 }
 
+/** Back to wherever the host opened the secret reveal from. */
+function endUnmask(state: RoomState) {
+  const from = state.unmaskFrom!;
+  state.phase = from.phase;
+  state.current = from.current;
+  state.qIndex = from.qIndex;
+  state.deadline = null;
+  state.unmaskFrom = null;
+}
+
+function canUnmask(state: RoomState): boolean {
+  // Only once at least one men's question has been revealed.
+  const played = state.rounds.some((r) => r.kind === "men" && r.questions.some((q) => state.awards[q.key] !== undefined));
+  return state.cast.length >= 2 && played && !["lobby", "question", "wager", "unmask"].includes(state.phase);
+}
+
 function afterRound(state: RoomState) {
   state.current = null;
   state.deadline = null;
@@ -653,6 +669,7 @@ function advance(state: RoomState, now: number) {
       if (state.unmaskStep <= state.unmaskOrder.length) state.unmaskStep++;
       else {
         state.menRevealed = true;
+        if (state.unmaskFrom) return endUnmask(state);
         afterRound(state);
       }
       return;
@@ -1012,7 +1029,10 @@ export function applyHostAction(state: RoomState, action: HostAction, now: numbe
       return advance(state, now);
     case "skipRound":
       if (state.phase === "lobby" || state.phase === "final") return;
-      if (state.phase === "unmask") state.menRevealed = true;
+      if (state.phase === "unmask") {
+        state.menRevealed = true;
+        if (state.unmaskFrom) return endUnmask(state); // skipping the secret reveal only ends the reveal
+      }
       if (state.current && (state.phase === "question" || state.phase === "wager")) clearKeys(state, [state.current.key]);
       return nextRoundOrFinish(state, now);
     case "restartRound": {
@@ -1126,6 +1146,13 @@ export function applyHostAction(state: RoomState, action: HostAction, now: numbe
       state.finishedAt = null;
       return;
     }
+    case "unmask":
+      if (!canUnmask(state)) throw new GameError(state.phase === "question" || state.phase === "wager" ? "Finish this question first." : "Play the men’s round first.");
+      state.unmaskFrom = { phase: state.phase, current: state.current, qIndex: state.qIndex };
+      state.slideshow = false;
+      state.awardsPanel = null;
+      startUnmask(state);
+      return;
     case "awardsPanel":
       if (state.phase !== "awards") return;
       state.awardsPanel = action.panel === "evidence" || action.panel === "rankings" ? action.panel : null;
@@ -1185,6 +1212,10 @@ export function applyHostAction(state: RoomState, action: HostAction, now: numbe
       return;
     case "back":
       if (state.slideshow) return void (state.slideshow = false);
+      if (state.phase === "unmask" && state.unmaskFrom) {
+        if (state.unmaskStep > 0) return void state.unmaskStep--;
+        return endUnmask(state);
+      }
       return goBack(state);
     case "backToLobby":
       for (const r of state.rounds) clearKeys(state, r.questions.map((q) => q.key)), (r.questions = []);
@@ -1213,6 +1244,7 @@ export function applyHostAction(state: RoomState, action: HostAction, now: numbe
         menRevealed: false,
         unmaskStep: 0,
         unmaskOrder: [],
+        unmaskFrom: null,
       });
       return;
   }
@@ -1422,6 +1454,7 @@ export function buildView(
     encore: { ...ENCORE_DEFAULT, ...(c.encore ?? {}) },
     slideshow: state.phase === "final" && !!state.slideshow,
     awards: state.phase === "awards" ? buildAwards(state) : null,
+    canUnmask: canUnmask(state), // a yes/no only; the host phone uses it to show the button
     tie: state.phase === "final" && isTie(state),
     isTiebreak: q?.kind === "tiebreak",
     fact: (() => {

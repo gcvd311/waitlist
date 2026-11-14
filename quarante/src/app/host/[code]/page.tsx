@@ -1097,6 +1097,11 @@ function Dock({
               <CopyHostLink code={view.code} />
             </>
           )}
+          {view.canUnmask && (
+            <button className="btn-ghost btn-sm" onClick={() => confirm("Reveal which girl each man really is, on the big screen?") && run({ type: "unmask" })}>
+              Reveal the men
+            </button>
+          )}
           {view.phase !== "lobby" && (
             <button className="btn-ghost btn-sm text-rouge" onClick={() => confirm("Back to the lobby? All scores reset; players stay.") && run({ type: "backToLobby" })}>
               Reset game
