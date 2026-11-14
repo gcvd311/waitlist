@@ -196,6 +196,7 @@ export interface RoomState {
   menRevealed: boolean;
   unmaskStep: number;
   unmaskOrder: string[]; // tokens, fewest votes first
+  unmaskFrom?: { phase: Phase; current: RoomQuestion | null; qIndex: number } | null; // where the host's secret reveal returns to
   slideshow?: boolean; // the messages slideshow is on the big screen
   awardsStep?: number; // GUILTY AS CHARGED: 0 title, 1 every winner at once
   awardsPanel?: "evidence" | "rankings" | null;
@@ -310,6 +311,7 @@ export interface RoomView {
   honoreeAnswered?: boolean;
   placeholderWarning?: boolean;
   allIn?: boolean;
+  canUnmask?: boolean;
 }
 
 export type HostAction =
@@ -333,6 +335,7 @@ export type HostAction =
   | { type: "extraRound" }
   | { type: "slideshow"; on: boolean }
   | { type: "bonusGame" }
+  | { type: "unmask" } // the host's secret option: reveal which girl each man was
   | { type: "awardsPanel"; panel: "evidence" | "rankings" | null }
   | { type: "jump"; round: number } // a round's opening, or past the last round for the final scores
   | { type: "backToLobby" }

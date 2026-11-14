@@ -371,3 +371,32 @@ console.log(`game40 (incl. bonus game): ${pass} checks passed`);
   ok(aw.tiers.length === 1 && aw.tiers[0].people.length === 3 && aw.tiers[0].place === 1, "a three-way tie shares gold, with no silver or bronze");
 }
 console.log(`game40 (incl. awards): ${pass} checks passed`);
+
+// The host's secret option: reveal who the men were, then carry on where we were
+{
+  const c = structuredClone(content);
+  c.rounds = c.rounds.map((r) => ({ ...r, enabled: r.kind === "men" || r.kind === "finale" }));
+  const su = createRoomState("SECRET", c, now());
+  const ids: string[] = c.players.map((pr) => joinRoom(su, "", { now: now(), isOnline: () => true, profileId: pr.id }).id);
+  applyHostAction(su, { type: "start" }, now());
+  assert.throws(() => applyHostAction(su, { type: "unmask" }, now()), GameError);
+  pass++;
+  let g = 0;
+  while (su.rounds[su.roundIndex].kind === "men" && g++ < 60) {
+    if (phase(su) === "question") applyPlayerAction(su, ids[1], { type: "answer", key: su.current!.key, value: su.current!.type === "kfm" ? "0,1,2" : 0 }, now());
+    applyHostAction(su, { type: "next" }, now());
+  }
+  ok(phase(su) === "leaderboard" || phase(su) === "round_intro", "men's round played");
+  const before = phase(su);
+  const v0 = buildView(su, { role: "player", pid: ids[2] }, now(), new Set(ids));
+  ok(v0.canUnmask && v0.unmask === null, "nothing revealed unless the host asks");
+  applyHostAction(su, { type: "unmask" }, now());
+  ok(phase(su) === "unmask" && su.unmaskStep === 0, "the host opens the reveal");
+  const total = su.unmaskOrder.length;
+  for (let k = 0; k <= total; k++) applyHostAction(su, { type: "next" }, now());
+  const shown = buildView(su, { role: "player", pid: ids[2] }, now(), new Set(ids)).unmask!;
+  ok(shown.cards.every((x) => x.femaleName), "every man unmasked");
+  applyHostAction(su, { type: "next" }, now());
+  ok(phase(su) === before && su.unmaskFrom === null, "then the game carries on where it was");
+}
+console.log(`game40 (incl. secret reveal): ${pass} checks passed`);
