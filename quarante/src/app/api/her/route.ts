@@ -21,9 +21,7 @@ function herQuestions(c: Content) {
   });
   return [
     ...c.questions.knowHer.filter((q) => q.prompt.trim() && !q.off && !q.optionsFrom && !("image" in q && !q.image)).map((q) => pick("knowHer", q)),
-    ...c.questions.honoreeVs.filter((q) => q.prompt.trim() && !q.off).map((q) => pick("honoreeVs", q)),
     ...(c.questions.finale ?? []).filter((q) => q.askHer && q.prompt.trim() && !q.off).map((q) => pick("finale", q)),
-    ...c.questions.final40.filter((q) => q.aboutHer && q.prompt.trim()).map((q) => pick("final40", q)),
   ];
 }
 

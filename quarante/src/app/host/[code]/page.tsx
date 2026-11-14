@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { hostKey, LETTERS, ROMAN, store, teamColor } from "@/lib/client";
 import { useRoom } from "@/hooks/useRoom";
@@ -193,7 +193,7 @@ function useHostSounds(view: RoomView | null) {
     if (first) return;
     if (view.phase === "round_intro") sfx.round();
     else if (view.phase === "reveal") sfx.reveal();
-    else if (view.phase === "awards") (view.awards?.step === 3 ? sfx.finale() : sfx.reveal());
+    else if (view.phase === "awards") (view.awards?.step === 1 ? sfx.finale() : sfx.reveal());
     else if (view.phase === "final") sfx.finale();
     else if (view.phase === "question") sfx.tap();
   }, [view]);
@@ -245,7 +245,7 @@ function Welcome({ view }: { view: RoomView }) {
 }
 
 /** The cat, the title, the line. Shared by the welcome screen and the lobby. */
-function Hero({ view }: { view: RoomView }) {
+function Hero({ view, line = true }: { view: RoomView; line?: boolean }) {
   return (
     <div className="relative flex flex-col items-center text-center">
       <Sparkle className="absolute left-[12%] top-6 w-14 text-bone/80 anim-pulse" />
@@ -253,11 +253,13 @@ function Hero({ view }: { view: RoomView }) {
       <Sparkle className="absolute right-[14%] top-28 w-10 text-bone/80 anim-pulse" style={{ animationDelay: "0.6s" }} />
       <Mascot mascots={view.mascots} pose="peek" className="w-[clamp(10rem,17vw,16rem)] -mb-6 relative z-10 anim-rise" />
       <TitleLockup className="anim-rise" size="clamp(3.6rem, 7vw, 7.4rem)" />
-      <p className="font-serif italic font-bold text-[clamp(1.6rem,2.6vw,2.8rem)] leading-tight mt-6 anim-rise delay-1">
-        {view.honoree.name} turns 40.
-        <br />
-        We have questions.
-      </p>
+      {line && (
+        <p className="font-serif italic font-bold text-[clamp(1.6rem,2.6vw,2.8rem)] leading-tight mt-6 anim-rise delay-1">
+          {view.honoree.name} turns 40.
+          <br />
+          We have questions.
+        </p>
+      )}
     </div>
   );
 }
@@ -271,7 +273,7 @@ function AwardsStage({ view, run }: { view: RoomView; run: (a: Record<string, un
     <div className="flex-1 relative flex flex-col justify-between gap-6">
       <AwardsTitle large step={a.step} />
       <AwardsPodium awards={a} large />
-      <div className={`flex justify-center gap-3 min-h-[2.5rem] ${a.step >= 3 ? "anim-fade" : "invisible"}`} style={{ animationDelay: "1.6s" }}>
+      <div className={`flex justify-center gap-3 min-h-[2.5rem] ${a.step >= 1 ? "anim-fade" : "invisible"}`} style={{ animationDelay: "1.6s" }}>
         <button className="btn-ghost btn-sm" onClick={() => run({ type: "awardsPanel", panel: panel === "evidence" ? null : "evidence" })}>
           The evidence {panel === "evidence" ? "▴" : "▾"}
         </button>
@@ -299,7 +301,7 @@ function Lobby({ view, run }: { view: RoomView; run: (a: Record<string, unknown>
   return (
     <div className="flex-1 grid lg:grid-cols-[1fr_1.15fr] gap-12 items-center">
       <div>
-        <Hero view={view} />
+        <Hero view={view} line={false} />
         <p className="mt-10 text-bone/50 text-center anim-rise delay-4">
           {view.confessionCount} confession{view.confessionCount === 1 ? "" : "s"} in the vault. Players can add more from their phones while you wait.
         </p>
@@ -863,13 +865,13 @@ function FinalScores({ view }: { view: RoomView }) {
 function Collage({ photos, big = false }: { photos: string[]; big?: boolean }) {
   const n = photos.length;
   const tilt = ["-rotate-2", "rotate-2", "rotate-1", "-rotate-1"];
-  const vh = big ? 60 : 72;
+  const vh = big ? 58 : 62;
   if (n === 1)
     return (
       // The whole photo, never cropped: it keeps its own shape.
       <div className="flex justify-center items-center -rotate-2">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={photos[0]} alt="" className={`${big ? "max-h-[60vh]" : "max-h-[72vh]"} max-w-full w-auto h-auto object-contain rounded-2xl shadow-2xl`} />
+        <img src={photos[0]} alt="" className={`${big ? "max-h-[58vh]" : "max-h-[62vh]"} max-w-full w-auto h-auto object-contain rounded-2xl shadow-2xl`} />
       </div>
     );
   // Any number of photos on one slide: the grid grows a column as the pile grows.
@@ -897,6 +899,36 @@ function Collage({ photos, big = false }: { photos: string[]; big?: boolean }) {
         </div>
       ))}
     </div>
+  );
+}
+
+/** A message set as large as it can be while still fitting on the screen: long ones shrink, nothing scrolls. */
+function FitQuote({ text, from, centered }: { text: string; from?: string; centered: boolean }) {
+  const box = useRef<HTMLQuoteElement>(null);
+  const [px, setPx] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const fit = () => {
+      const el = box.current;
+      if (!el) return;
+      // Measure against the room on screen, not the box: the name's lettering overhangs its line.
+      const room = window.innerHeight * 0.62;
+      let size = Math.min(58, Math.max(18, window.innerWidth * 0.034));
+      el.style.fontSize = `${size}px`;
+      while (el.offsetHeight > room && size > 13) {
+        size -= 1;
+        el.style.fontSize = `${size}px`;
+      }
+      setPx(size);
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [text, from]);
+  return (
+    <blockquote ref={box} className={`pb-[0.4em] ${centered ? "text-center mx-auto max-w-5xl" : ""}`} style={{ fontSize: px ?? undefined }}>
+      <p className="font-serif leading-snug">“{text}”</p>
+      {from && <footer className="title-face text-[1.15em] mt-[0.8em] -rotate-[2deg]">{from}</footer>}
+    </blockquote>
   );
 }
 
@@ -953,18 +985,31 @@ function Slideshow({ view, run }: { view: RoomView; run: (a: Record<string, unkn
         ) : s.kind === "message" ? (
           <div className={`w-full max-w-7xl grid gap-14 items-center ${s.group?.length ? (s.group.length > 1 ? "lg:grid-cols-[1.3fr_1fr]" : "lg:grid-cols-[1fr_1.3fr]") : ""}`}>
             {!!s.group?.length && <Collage photos={s.group} />}
-            <blockquote className={s.group?.length ? "" : "text-center mx-auto max-w-5xl"}>
-              <p className={`font-serif leading-snug ${(s.text ?? "").length > 220 ? "text-[clamp(1.4rem,2.4vw,2.6rem)]" : "text-[clamp(1.8rem,3.4vw,3.6rem)]"}`}>“{s.text}”</p>
-              {s.from && <footer className="title-face text-[clamp(1.6rem,2.6vw,2.8rem)] mt-8 -rotate-[2deg]">{s.from}</footer>}
-            </blockquote>
+            <FitQuote text={s.text ?? ""} from={s.from} centered={!s.group?.length} />
           </div>
         ) : null}
         {s.kind === "end" && (
-          <div className="text-center">
-            <Sticker name="double-hearts" className="w-28 mx-auto mb-6" />
-            <p className="title-face text-[clamp(3rem,8vw,8rem)] -rotate-[3deg] leading-none">Happy 40th,</p>
-            <p className="title-face text-[clamp(3rem,8vw,8rem)] -rotate-[3deg] leading-none mt-2">{view.honoree.name}.</p>
-            <Sticker name="cat-smile" className="w-48 mx-auto mt-8" />
+          <div className="relative text-center px-16">
+            {/* the sparkles, twinkling out of step */}
+            {[
+              ["-left-6 top-6", "w-12", "0s"],
+              ["left-10 top-[42%]", "w-6", "0.9s"],
+              ["-left-2 bottom-24", "w-9", "1.6s"],
+              ["-right-4 top-2", "w-9", "0.4s"],
+              ["right-8 top-[38%]", "w-14", "1.2s"],
+              ["-right-6 bottom-20", "w-7", "2s"],
+              ["left-1/3 -top-4", "w-5", "0.7s"],
+              ["right-1/3 bottom-4", "w-6", "1.8s"],
+            ].map(([pos, size, delay], k) => (
+              <Sparkle key={k} className={`absolute ${pos} ${size} ${k % 3 === 1 ? "text-gold" : "text-bone/85"} anim-pulse`} style={{ animationDelay: delay }} />
+            ))}
+            <Sticker name="double-hearts" className="w-24 mx-auto mb-5" />
+            <p className="title-face text-[clamp(3rem,7.4vw,7.4rem)] -rotate-[3deg] leading-none">Happy 40th,</p>
+            <p className="title-face text-[clamp(3rem,7.4vw,7.4rem)] -rotate-[3deg] leading-none mt-2">{view.honoree.name}.</p>
+            <p className="font-serif italic font-bold text-[clamp(1.8rem,3.4vw,3.4rem)] mt-8 anim-rise" style={{ animationDelay: "0.6s" }}>
+              We love you!
+            </p>
+            <Sticker name="cat-smile" className="w-36 mx-auto mt-6" />
           </div>
         )}
       </div>
@@ -1006,7 +1051,7 @@ function Dock({
     question: view.question?.kind === "men" || view.question?.kind === "likely" ? "Close voting" : "Reveal now",
     reveal: "Next",
     unmask: !view.unmask ? "Next" : view.unmask.step === 0 ? "Unmask the first" : view.unmask.step < view.unmask.total ? "Unmask the next" : view.unmask.step === view.unmask.total ? "Show them all" : "Continue",
-    awards: !view.awards ? "Continue" : view.awards.step === 0 ? "Start the reveal" : view.awards.step < 3 ? "Next reveal" : view.round && view.round.index + 1 < view.round.total ? "Continue to the next round" : "Continue",
+    awards: !view.awards ? "Continue" : view.awards.step === 0 ? "Reveal the verdicts" : view.round && view.round.index + 1 < view.round.total ? "Continue to the next round" : "Continue",
     leaderboard: view.round && view.round.index + 1 < view.round.total ? "Next round" : "Reveal the final scores",
     final: "",
   };

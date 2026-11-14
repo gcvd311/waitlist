@@ -4,8 +4,8 @@ import { Portrait, Sticker } from "@/components/ui";
 import { Sparkle } from "@/components/Cat";
 
 const TIER = {
-  1: { label: "Gold", metal: "metal-gold", roman: "I", step: 3 },
-  2: { label: "Silver", metal: "metal-silver", roman: "II", step: 2 },
+  1: { label: "Gold", metal: "metal-gold", roman: "I", step: 1 },
+  2: { label: "Silver", metal: "metal-silver", roman: "II", step: 1 },
   3: { label: "Bronze", metal: "metal-bronze", roman: "III", step: 1 },
 } as const;
 
@@ -25,10 +25,12 @@ const nominations = (n: number) => `${n} nomination${n === 1 ? "" : "s"}`;
 const names = (ps: Nominee[]) => (ps.length === 1 ? ps[0].name : ps.length === 2 ? `${ps[0].name} & ${ps[1].name}` : `${ps.slice(0, -1).map((p) => p.name).join(", ")} & ${ps[ps.length - 1].name}`);
 
 /**
- * GUILTY AS CHARGED: Silver, Gold, Bronze, left to right.
- * Bronze is revealed first, then Silver, then Gold. Equal totals share a step.
+ * GUILTY AS CHARGED: Silver, Gold, Bronze, left to right, all revealed at once.
+ * Equal totals share a step; three or more at the top share one gold step.
  */
 export function AwardsPodium({ awards, large = false }: { awards: AwardsView; large?: boolean }) {
+  const only = awards.tiers.length === 1 && awards.tiers[0].people.length >= 3 ? awards.tiers[0] : null;
+  if (only) return <SharedGold tier={only} shown={awards.step >= 1} large={large} />;
   const byPlace = (p: 1 | 2 | 3) => awards.tiers.find((t) => t.place === p);
   const order: (1 | 2 | 3)[] = [2, 1, 3];
   const heights = large ? { 1: "h-[13vh]", 2: "h-[9vh]", 3: "h-[6vh]" } : { 1: "h-20", 2: "h-14", 3: "h-10" };
@@ -148,6 +150,48 @@ export function AwardsTitle({ large = false, step }: { large?: boolean; step: nu
       </h1>
       {step === 0 && <p className={`font-serif italic ${large ? "text-[clamp(1.2rem,2vw,2rem)] mt-5" : "text-base mt-3"} text-bone/80 anim-rise delay-3`}>Three nominees. No appeals.</p>}
       <Sticker name="bow" className={`absolute ${large ? "-top-6 right-[14%] w-20" : "-top-3 right-0 w-10"} rotate-12`} />
+    </div>
+  );
+}
+
+/** Three or more tied at the top: one wide gold step, each of them with her own charge. */
+function SharedGold({ tier, shown, large }: { tier: AwardsView["tiers"][number]; shown: boolean; large: boolean }) {
+  const n = tier.people.length;
+  const w = large ? `min(${Math.max(7, 30 / n)}vw, ${Math.max(14, 34 / Math.sqrt(n))}vh)` : `${Math.max(3.4, 12 / n)}rem`;
+  return (
+    <div className={`flex flex-col items-center w-full mx-auto ${large ? "max-w-6xl pt-12" : "pt-6"}`}>
+      {shown ? (
+        <div className="relative w-full anim-coronate">
+          <span className="absolute inset-x-[15%] top-[5%] bottom-[25%] rounded-full bg-gold/25 blur-3xl anim-halo" aria-hidden />
+          <p className={`relative text-center font-mono uppercase tracking-label text-bone/75 ${large ? "text-base mb-8" : "text-[10px] mb-5"}`}>
+            A {n}-way tie for gold · {nominations(tier.votes)} each
+          </p>
+          <div className={`relative flex justify-center ${large ? "gap-8" : "gap-2"}`}>
+            {tier.people.map((p) => (
+              <div key={p.id} className="flex flex-col items-center text-center min-w-0" style={{ width: w }}>
+                <div className="relative w-full">
+                  <Sticker name="crown" className="absolute left-1/2 z-10 anim-crown" style={{ top: large ? "-2.4rem" : "-1.1rem", width: large ? "4.4rem" : "2.2rem" }} />
+                  <Portrait photo={p.photo} name={p.name} className="ring-[5px] ring-gold" />
+                </div>
+                <p className={`mt-3 font-mono font-bold uppercase truncate max-w-full ${large ? "text-[clamp(1.1rem,1.8vw,1.8rem)]" : "text-[12px]"}`}>{p.name}</p>
+                {p.top[0] && (
+                  <p className={`font-serif italic leading-snug ${large ? "text-[clamp(0.85rem,1.1vw,1.1rem)]" : "text-[10px]"} text-bone/85 line-clamp-3`}>
+                    Most accused of: {p.top[0].label}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="flex justify-center gap-4" style={{ minHeight: large ? "16rem" : "7rem" }}>
+          <span className={`self-end grid place-items-center rounded-2xl border-2 border-dashed border-bone/25 text-bone/35 font-serif italic ${large ? "w-28 h-36 text-5xl" : "w-14 h-[4.5rem] text-2xl"}`}>?</span>
+        </div>
+      )}
+      <div className={`relative ${large ? "w-[70%] h-[11vh] mt-6" : "w-[90%] h-16 mt-4"} rounded-t-xl bg-bone text-ink overflow-hidden shadow-[0_20px_40px_-20px_rgba(40,0,6,0.8)]`}>
+        <span className={`absolute inset-x-0 top-0 ${large ? "h-2" : "h-1"} metal-gold`} />
+        <span className={`absolute inset-0 grid place-items-center font-mono font-bold uppercase tracking-label ${large ? "text-[clamp(0.9rem,1.4vw,1.4rem)]" : "text-[10px]"}`}>Gold</span>
+      </div>
     </div>
   );
 }

@@ -10,8 +10,6 @@ type State = { authed: boolean; name: string; configured?: boolean; questions?: 
 const GROUPS: { set: Q["set"]; title: string; hint: string }[] = [
   { set: "knowHer", title: "Crystal Clear?", hint: "Your real answers. Your friends will be checked against them." },
   { set: "finale", title: "No Further Questions", hint: "A few for the last round." },
-  { set: "honoreeVs", title: "Them vs. you", hint: "Your friends will try to guess what you picked here. Be honest; it’s more fun." },
-  { set: "final40", title: "Extra", hint: "A few last facts about your life." },
 ];
 
 export default function HerPage() {

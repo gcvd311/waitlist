@@ -657,8 +657,9 @@ function advance(state: RoomState, now: number) {
       }
       return;
     case "awards":
-      if ((state.awardsStep ?? 0) < 3) {
-        state.awardsStep = (state.awardsStep ?? 0) + 1;
+      // One reveal: every winner at once.
+      if ((state.awardsStep ?? 0) < 1) {
+        state.awardsStep = 1;
         state.awardsPanel = null;
       } else {
         state.awardsPanel = null;
@@ -723,7 +724,9 @@ export function buildAwards(state: RoomState): AwardsView | null {
   }));
   // Gold, silver and bronze go to the three highest totals; equal totals stand on the same step.
   const levels = [...new Set(ranking.filter((p) => p.votes > 0).map((p) => p.votes))].slice(0, 3);
-  const tiers = levels.map((v, i) => ({ place: (i + 1) as 1 | 2 | 3, votes: v, people: ranking.filter((p) => p.votes === v) }));
+  let tiers = levels.map((v, i) => ({ place: (i + 1) as 1 | 2 | 3, votes: v, people: ranking.filter((p) => p.votes === v) }));
+  // Three or more level at the top: they share gold, and there is no silver or bronze.
+  if (tiers[0] && tiers[0].people.length >= 3) tiers = [tiers[0]];
   return { step: state.awardsStep ?? 0, panel: state.awardsPanel ?? null, tiers, ranking };
 }
 
