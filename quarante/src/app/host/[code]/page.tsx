@@ -7,7 +7,7 @@ import { sfx } from "@/lib/sound";
 import { Avatar, Mascot, MuteButton, Portrait, PromptText, QR, Sticker, TeamDot, Timer, TitleLockup, Toast, Wordmark } from "@/components/ui";
 import { Sparkle } from "@/components/Cat";
 import { AwardsPodium, AwardsTitle, Evidence, FullRankings } from "@/components/Awards";
-import { Bars, KfmTable, Lineup, Ranking, screenGrid, revealHeadline, RevealResultList, Standings, TopPlayers, voteRows } from "@/components/game";
+import { Bars, KfmTable, Lineup, oneRow, Ranking, revealHeadline, RevealResultList, Standings, TopPlayers, voteRows } from "@/components/game";
 import type { RoomView } from "@/lib/types";
 
 type Act = ReturnType<typeof useRoom>["act"];
@@ -296,6 +296,8 @@ function AwardsStage({ view, run }: { view: RoomView; run: (a: Record<string, un
   );
 }
 
+const lobbyCols = (n: number) => (n <= 3 ? n : Math.ceil(n / 2));
+
 function Lobby({ view, run }: { view: RoomView; run: (a: Record<string, unknown>) => void }) {
   const [menu, setMenu] = useState<string | null>(null);
   return (
@@ -316,16 +318,16 @@ function Lobby({ view, run }: { view: RoomView; run: (a: Record<string, unknown>
             </p>
           </div>
           <div
-            className="grid gap-x-4 gap-y-3 mx-auto"
+            className="flex flex-wrap justify-center gap-x-4 gap-y-3 mx-auto"
             style={{
-              gridTemplateColumns: `repeat(${view.profiles.length > 6 ? 5 : 3}, minmax(0, 1fr))`,
-              maxWidth: `calc(${view.profiles.length > 6 ? 5 : 3} * ((100vh - 470px) / 2) * 0.8)`,
+              // Two rows, the longer one on top: 7 → 4 + 3, 8 → 4 + 4, 6 → 3 + 3.
+              maxWidth: `calc(${lobbyCols(view.profiles.length)} * ((100vh - 470px) / 2) * 0.8)`,
             }}
           >
             {view.profiles.map((pr, i) => {
               const taken = !!pr.playerId;
               return (
-                <div key={pr.id} className="relative anim-rise" style={{ animationDelay: `${i * 70}ms` }}>
+                <div key={pr.id} className="relative anim-rise" style={{ animationDelay: `${i * 70}ms`, width: `calc((100% - ${(lobbyCols(view.profiles.length) - 1) * 16}px) / ${lobbyCols(view.profiles.length)})` }}>
                   <button className="block w-full text-left" onClick={() => taken && setMenu(menu === pr.id ? null : pr.id)}>
                     <Portrait photo={pr.photo} name={pr.name} dim={!taken}>
                       {pr.honoree && <span className="chip absolute right-2 top-2">Birthday</span>}
@@ -646,7 +648,7 @@ function MenResults({ view }: { view: RoomView }) {
   const r = view.reveal!;
   const rows = q.options.map((name, i) => ({ name, i, n: r.distribution[i] ?? 0, photo: q.optionPhotos?.[i] })).sort((a, b) => b.n - a.n);
   const max = Math.max(0, ...rows.map((x) => x.n));
-  const { cols, maxWidth } = screenGrid(rows.length, 330);
+  const { cols, maxWidth } = oneRow(rows.length, 360);
   return (
     <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, maxWidth }}>
       {rows.map((x, k) => {
